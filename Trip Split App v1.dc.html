@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#EFEDE8;font-family:"IBM Plex Sans Thai",system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:#1F6F5C}a:hover{color:#175647}input{font-family:inherit}*::-webkit-scrollbar{width:0;height:0}</style></helmet>
+
+<div style="display:flex;gap:56px;align-items:flex-start;padding:48px 56px 72px">
+
+  <div style="width:320px;flex:none;padding-top:8px">
+    <div style="font:500 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;color:#8C948F;text-transform:uppercase">Prototype v1</div>
+    <h1 style="margin:12px 0 0;font-size:27px;line-height:1.25;font-weight:600;color:#16201C;letter-spacing:-.01em">แอพหารค่าใช้จ่ายทริป</h1>
+    <p style="margin:12px 0 0;font-size:13.5px;line-height:1.65;color:#5E6A65;text-wrap:pretty">โปรโตไทป์กดใช้งานได้จริง — เพิ่มรายการ เลือกคนจ่าย หารเท่ากันหรือระบุจำนวน แล้วดูยอดคงค้างกับแผนเคลียร์หนี้อัปเดตตามจริง</p>
+
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid rgba(22,32,28,.1)">
+      <div style="font:600 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#16201C">แนวทางที่ใช้</div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px;font-size:12.5px;line-height:1.55;color:#5E6A65">
+        <div><span style="color:#16201C;font-weight:500">สะอาด เน้นตัวเลข</span> — ตัวเลขเป็นพระเอก ใช้ตัวเลขความกว้างเท่ากัน สีเดียวคุมทั้งแอพ</div>
+        <div><span style="color:#16201C;font-weight:500">สีหลัก</span> — เขียวเข้ม #1F6F5C สำหรับ “ได้คืน” และปุ่มหลัก · แดงอิฐ #B3452B สำหรับ “ค้างจ่าย”</div>
+        <div><span style="color:#16201C;font-weight:500">ตัวอักษร</span> — IBM Plex Sans Thai ทั้งหมด, Plex Mono เฉพาะป้ายเล็ก</div>
+        <div><span style="color:#16201C;font-weight:500">เคลียร์หนี้</span> — ยุบหนี้ไขว้ให้เหลือจำนวนโอนน้อยที่สุด</div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding-top:20px;border-top:1px solid rgba(22,32,28,.1)">
+      <div style="font:600 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#16201C">ลองกดดู</div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:1.5;color:#5E6A65">
+        <div>1 · แตะทริป “เชียงใหม่” → ดูรายการและยอดคงค้าง</div>
+        <div>2 · ปุ่ม <span style="color:#1F6F5C;font-weight:500">เพิ่มรายการ</span> → ใส่ยอด เลือกคนจ่าย สลับวิธีหาร</div>
+        <div>3 · ปุ่ม <span style="color:#1F6F5C;font-weight:500">เคลียร์หนี้</span> → โอนผ่าน PromptPay แล้วกดยืนยัน</div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding-top:20px;border-top:1px solid rgba(22,32,28,.1);font-size:12px;line-height:1.6;color:#8C948F">
+      ยังไม่ได้ทำ: หารเป็น %, สกุลเงินหลายสกุล, สลิปจากแกลเลอรี, ไทม์ไลน์กิจกรรม — บอกได้ว่าจะให้ทำอันไหนต่อ
+    </div>
+  </div>
+
+  <div style="flex:none">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+
+    <div style="height:100%;display:flex;flex-direction:column;background:#F6F5F2;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#16201C;position:relative;overflow:hidden">
+
+      <sc-if value="{{ isTrips }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:62px 20px 6px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <h2 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em">ทริปของฉัน</h2>
+            <div style="width:34px;height:34px;border-radius:17px;background:#1F6F5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">ฟ</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow:auto;padding:14px 16px 40px">
+          <div style="background:#16201C;border-radius:18px;padding:18px 18px 16px;color:#fff">
+            <div style="font-size:11.5px;color:rgba(255,255,255,.6);letter-spacing:.02em">ยอดสุทธิทุกทริป</div>
+            <div style="margin-top:6px;font-size:34px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:{{ myNetColorOnDark }}">{{ myNetSigned }}</div>
+            <div style="margin-top:4px;font-size:12.5px;color:rgba(255,255,255,.66)">{{ myNetLabel }}</div>
+          </div>
+
+          <div style="margin:22px 0 10px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#8C948F;text-transform:uppercase">Active</div>
+          <sc-for list="{{ trips }}" as="t" hint-placeholder-count="3">
+            <div onClick="{{ t.open }}" style="background:#fff;border-radius:16px;padding:15px 16px;margin-bottom:10px;border:1px solid rgba(22,32,28,.07);cursor:pointer" style-hover="border-color:rgba(31,111,92,.45)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:15.5px;font-weight:600;letter-spacing:-.005em">{{ t.name }}</div>
+                  <div style="margin-top:3px;font-size:12px;color:#7C8783">{{ t.dates }} · {{ t.count }} คน</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ t.netColor }}">{{ t.netText }}</div>
+                  <div style="margin-top:3px;font-size:11px;color:#8C948F">{{ t.netLabel }}</div>
+                </div>
+              </div>
+              <div style="margin-top:12px;height:5px;border-radius:3px;background:#EDEBE6;overflow:hidden">
+                <div style="height:100%;background:#1F6F5C;width:{{ t.progress }}"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:8px 16px 34px;background:#F6F5F2">
+          <div style="height:50px;border-radius:15px;background:#1F6F5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#175647">สร้างทริปใหม่</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTrip }}">
+        <div style="padding:60px 18px 0;background:#fff;border-bottom:1px solid rgba(22,32,28,.07)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div onClick="{{ goTrips }}" style="font-size:13.5px;color:#1F6F5C;font-weight:500;cursor:pointer">‹ ทริป</div>
+            <div style="font-size:13.5px;color:#1F6F5C;font-weight:500;cursor:pointer" onClick="{{ noop }}">จัดการ</div>
+          </div>
+          <h2 style="margin:10px 0 0;font-size:23px;font-weight:600;letter-spacing:-.01em">{{ tripName }}</h2>
+          <div style="margin-top:4px;font-size:12.5px;color:#7C8783">10–12 ต.ค. 2568 · ใช้ไปทั้งหมด {{ totalText }}</div>
+
+          <div style="margin-top:16px;display:flex;align-items:flex-end;justify-content:space-between">
+            <div>
+              <div style="font-size:11.5px;color:#8C948F">{{ myNetLabel }}</div>
+              <div style="margin-top:2px;font-size:32px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:{{ myNetColor }}">{{ myNetAbs }}</div>
+            </div>
+            <div style="display:flex;gap:-8px">
+              <sc-for list="{{ members }}" as="m" hint-placeholder-count="4">
+                <div style="width:32px;height:32px;border-radius:16px;background:{{ m.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;border:2px solid #fff;margin-left:-8px">{{ m.ini }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;display:flex;gap:22px">
+            <div onClick="{{ showList }}" style="padding-bottom:10px;font-size:14px;font-weight:600;color:{{ tabListColor }};border-bottom:2px solid {{ tabListBorder }};cursor:pointer">รายการ ({{ expenseCount }})</div>
+            <div onClick="{{ showBalances }}" style="padding-bottom:10px;font-size:14px;font-weight:600;color:{{ tabBalColor }};border-bottom:2px solid {{ tabBalBorder }};cursor:pointer">ยอดคงค้าง</div>
+          </div>
+        </div>
+
+        <div style="flex:1;overflow:auto">
+          <sc-if value="{{ isList }}">
+            <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+              <div style="padding:16px 18px 7px;display:flex;justify-content:space-between;align-items:baseline">
+                <div style="font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8C948F;text-transform:uppercase">{{ g.label }}</div>
+                <div style="font-size:11.5px;color:#A2A9A5;font-variant-numeric:tabular-nums">{{ g.sumText }}</div>
+              </div>
+              <sc-for list="{{ g.items }}" as="e" hint-placeholder-count="3">
+                <div style="display:flex;gap:12px;align-items:center;padding:13px 18px;background:#fff;border-top:1px solid rgba(22,32,28,.06)">
+                  <div style="width:34px;height:34px;flex:none;border-radius:11px;background:#EDF2F0;color:#1F6F5C;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600">{{ e.letter }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14.5px;font-weight:500;letter-spacing:-.005em">{{ e.title }}</div>
+                    <div style="margin-top:2px;font-size:11.5px;color:#7C8783">{{ e.sub }}</div>
+                  </div>
+                  <div style="text-align:right;flex:none">
+                    <div style="font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums">{{ e.amountText }}</div>
+                    <div style="margin-top:2px;font-size:11.5px;font-weight:500;font-variant-numeric:tabular-nums;color:{{ e.deltaColor }}">{{ e.deltaText }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </sc-for>
+            <div style="height:24px"></div>
+          </sc-if>
+
+          <sc-if value="{{ isBalances }}">
+            <div style="padding:16px 18px 8px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8C948F;text-transform:uppercase">ยอดของแต่ละคน</div>
+            <sc-for list="{{ balanceRows }}" as="b" hint-placeholder-count="4">
+              <div style="display:flex;gap:12px;align-items:center;padding:14px 18px;background:#fff;border-top:1px solid rgba(22,32,28,.06)">
+                <div style="width:36px;height:36px;flex:none;border-radius:18px;background:{{ b.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600">{{ b.ini }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14.5px;font-weight:500">{{ b.name }}</div>
+                  <div style="margin-top:2px;font-size:11.5px;color:#7C8783">จ่ายไป {{ b.paidText }} · ส่วนแบ่ง {{ b.shareText }}</div>
+                </div>
+                <div style="text-align:right;flex:none">
+                  <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ b.color }}">{{ b.netText }}</div>
+                  <div style="margin-top:2px;font-size:11px;color:#8C948F">{{ b.label }}</div>
+                </div>
+              </div>
+            </sc-for>
+            <div style="padding:20px 18px 8px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8C948F;text-transform:uppercase">แผนโอนที่สั้นที่สุด</div>
+            <sc-for list="{{ transfers }}" as="t" hint-placeholder-count="3">
+              <div style="display:flex;gap:10px;align-items:center;padding:13px 18px;background:#fff;border-top:1px solid rgba(22,32,28,.06)">
+                <div style="flex:1;font-size:14px"><span style="font-weight:600">{{ t.fromName }}</span> <span style="color:#A2A9A5">→</span> <span style="font-weight:600">{{ t.toName }}</span></div>
+                <div style="font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums">{{ t.amountText }}</div>
+              </div>
+            </sc-for>
+            <div style="height:24px"></div>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;gap:10px;padding:10px 16px 34px;background:#F6F5F2;border-top:1px solid rgba(22,32,28,.07)">
+          <div onClick="{{ openAdd }}" style="flex:1;height:50px;border-radius:15px;background:#1F6F5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#175647">เพิ่มรายการ</div>
+          <div onClick="{{ openSettle }}" style="flex:1;height:50px;border-radius:15px;background:#fff;border:1px solid rgba(22,32,28,.14);color:#16201C;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer" style-hover="border-color:#16201C">เคลียร์หนี้</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAdd }}">
+        <div style="padding:58px 18px 12px;background:#fff;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(22,32,28,.07)">
+          <div onClick="{{ cancelAdd }}" style="font-size:13.5px;color:#7C8783;cursor:pointer;width:56px">ยกเลิก</div>
+          <div style="font-size:15px;font-weight:600">รายการใหม่</div>
+          <div onClick="{{ saveDraft }}" style="font-size:13.5px;font-weight:600;color:{{ saveColor }};cursor:pointer;width:56px;text-align:right">บันทึก</div>
+        </div>
+        <div style="flex:1;overflow:auto;background:#fff">
+          <div style="padding:22px 18px 18px;text-align:center;border-bottom:1px solid rgba(22,32,28,.06)">
+            <div style="font-size:11.5px;color:#8C948F">จำนวนเงิน (บาท)</div>
+            <div style="margin-top:4px;font-size:42px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.025em;color:{{ draftAmountColor }}">{{ draftAmountText }}</div>
+          </div>
+          <div style="padding:14px 18px 4px">
+            <input value="{{ draftTitle }}" onChange="{{ setTitle }}" placeholder="รายการนี้คืออะไร เช่น หมูกระทะริมปิง" style="width:100%;box-sizing:border-box;height:46px;border:1px solid rgba(22,32,28,.14);border-radius:13px;padding:0 14px;font-size:14.5px;color:#16201C;background:#FBFAF8;outline:none" />
+          </div>
+          <div style="padding:12px 18px 2px;display:flex;gap:7px;flex-wrap:wrap">
+            <sc-for list="{{ cats }}" as="c" hint-placeholder-count="5">
+              <div onClick="{{ c.pick }}" style="padding:8px 13px;border-radius:11px;font-size:13px;font-weight:500;cursor:pointer;background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.border }}">{{ c.name }}</div>
+            </sc-for>
+          </div>
+          <div style="padding:18px 18px 6px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8C948F;text-transform:uppercase">ใครจ่าย</div>
+          <div style="padding:0 18px;display:flex;gap:8px">
+            <sc-for list="{{ payerChoices }}" as="p" hint-placeholder-count="4">
+              <div onClick="{{ p.pick }}" style="flex:1;padding:10px 4px;border-radius:13px;text-align:center;cursor:pointer;background:{{ p.bg }};border:1px solid {{ p.border }}">
+                <div style="width:30px;height:30px;margin:0 auto;border-radius:15px;background:{{ p.avatarBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600">{{ p.ini }}</div>
+                <div style="margin-top:6px;font-size:11.5px;font-weight:500;color:{{ p.fg }}">{{ p.short }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:18px 18px 6px;display:flex;align-items:center;justify-content:space-between">
+            <div style="font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8C948F;text-transform:uppercase">หารกันยังไง</div>
+            <div style="font-size:11.5px;color:{{ remainColor }};font-variant-numeric:tabular-nums">{{ remainText }}</div>
+          </div>
+          <div style="margin:0 18px;padding:3px;display:flex;gap:3px;background:#F1EFEB;border-radius:12px">
+            <div onClick="{{ setEqual }}" style="flex:1;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;background:{{ eqBg }};color:{{ eqFg }};box-shadow:{{ eqShadow }}">หารเท่ากัน</div>
+            <div onClick="{{ setExact }}" style="flex:1;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;background:{{ exBg }};color:{{ exFg }};box-shadow:{{ exShadow }}">ระบุจำนวน</div>
+          </div>
+          <div style="margin-top:10px">
+            <sc-for list="{{ splitRows }}" as="r" hint-placeholder-count="4">
+              <div style="display:flex;gap:11px;align-items:center;padding:11px 18px;border-top:1px solid rgba(22,32,28,.06)">
+                <div onClick="{{ r.toggle }}" style="width:22px;height:22px;flex:none;border-radius:7px;cursor:pointer;background:{{ r.boxBg }};border:1.5px solid {{ r.boxBorder }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ r.check }}</div>
+                <div onClick="{{ r.toggle }}" style="width:30px;height:30px;flex:none;border-radius:15px;background:{{ r.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;opacity:{{ r.opacity }}">{{ r.ini }}</div>
+                <div onClick="{{ r.toggle }}" style="flex:1;font-size:14px;font-weight:500;cursor:pointer;color:{{ r.nameColor }}">{{ r.name }}</div>
+                <sc-if value="{{ isExact }}">
+                  <input value="{{ r.exactValue }}" onChange="{{ r.setExact }}" placeholder="0" style="width:84px;height:36px;box-sizing:border-box;text-align:right;border:1px solid rgba(22,32,28,.14);border-radius:10px;padding:0 10px;font-size:14px;font-variant-numeric:tabular-nums;background:#FBFAF8;outline:none;color:#16201C" />
+                </sc-if>
+                <sc-if value="{{ isEqual }}">
+                  <div style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ r.amountColor }}">{{ r.amountText }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="height:14px"></div>
+        </div>
+        <div style="background:#F1EFEB;padding:8px 6px 30px;border-top:1px solid rgba(22,32,28,.08)">
+          <sc-for list="{{ keypad }}" as="row" hint-placeholder-count="4">
+            <div style="display:flex;gap:6px;padding:3px 6px">
+              <sc-for list="{{ row.keys }}" as="k" hint-placeholder-count="3">
+                <div onClick="{{ k.press }}" style="flex:1;height:44px;border-radius:11px;background:{{ k.bg }};color:{{ k.fg }};display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer;box-shadow:0 1px 0 rgba(22,32,28,.14)">{{ k.label }}</div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSettle }}">
+        <div style="padding:58px 18px 14px;background:#fff;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(22,32,28,.07)">
+          <div onClick="{{ backToTrip }}" style="font-size:13.5px;color:#1F6F5C;font-weight:500;cursor:pointer">‹ กลับ</div>
+          <div style="font-size:15px;font-weight:600">เคลียร์หนี้</div>
+          <div style="width:44px"></div>
+        </div>
+        <div style="flex:1;overflow:auto">
+          <div style="padding:20px 18px 4px">
+            <div style="font-size:14px;line-height:1.6;color:#5E6A65">ยุบหนี้ไขว้แล้วเหลือโอน <span style="color:#16201C;font-weight:600">{{ transferCount }} ครั้ง</span> จากเดิมที่ต้องโอนกันไปมา {{ naiveCount }} ครั้ง</div>
+          </div>
+          <sc-for list="{{ transfers }}" as="t" hint-placeholder-count="3">
+            <div style="margin:12px 16px 0;background:#fff;border:1px solid rgba(22,32,28,.08);border-radius:16px;padding:15px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:34px;height:34px;flex:none;border-radius:17px;background:{{ t.fromBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">{{ t.fromIni }}</div>
+                <div style="color:#C3C8C5;font-size:15px">→</div>
+                <div style="width:34px;height:34px;flex:none;border-radius:17px;background:{{ t.toBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">{{ t.toIni }}</div>
+                <div style="flex:1;min-width:0;margin-left:2px">
+                  <div style="font-size:14px;font-weight:500">{{ t.fromName }} โอนให้ {{ t.toName }}</div>
+                  <div style="margin-top:2px;font-size:11.5px;color:#8C948F">{{ t.note }}</div>
+                </div>
+                <div style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ t.amountText }}</div>
+              </div>
+              <div onClick="{{ t.act }}" style="margin-top:13px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;cursor:pointer;background:{{ t.btnBg }};color:{{ t.btnFg }};border:1px solid {{ t.btnBorder }}">{{ t.btnLabel }}</div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ allSettled }}">
+            <div style="margin:20px 16px;padding:28px 20px;text-align:center;background:#EDF2F0;border-radius:18px">
+              <div style="font-size:17px;font-weight:600;color:#1F6F5C">เคลียร์ครบทุกคนแล้ว</div>
+              <div style="margin-top:6px;font-size:13px;color:#5E6A65;line-height:1.6">ไม่มียอดค้างในทริปนี้ · ปิดทริปได้เลย</div>
+            </div>
+          </sc-if>
+          <div style="height:30px"></div>
+        </div>
+        <div style="padding:10px 16px 34px;background:#F6F5F2;border-top:1px solid rgba(22,32,28,.07)">
+          <div onClick="{{ backToTrip }}" style="height:50px;border-radius:15px;background:#fff;border:1px solid rgba(22,32,28,.14);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">เสร็จสิ้น</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPay }}">
+        <div style="position:absolute;inset:0;background:rgba(16,24,20,.42);z-index:80" onClick="{{ closePay }}"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;z-index:81;background:#fff;border-radius:26px 26px 0 0;padding:18px 20px 34px">
+          <div style="width:38px;height:4px;border-radius:2px;background:rgba(22,32,28,.16);margin:0 auto 16px"></div>
+          <div style="font-size:18px;font-weight:600;text-align:center">โอนให้ {{ payToName }}</div>
+          <div style="margin-top:4px;font-size:13px;color:#7C8783;text-align:center">PromptPay · {{ payToPhone }}</div>
+          <div style="margin:16px auto 0;width:176px;height:176px;border-radius:16px;overflow:hidden;background:#F1EFEB;display:flex;align-items:center;justify-content:center">
+            <svg width="176" height="176" viewBox="0 0 176 176" role="img" aria-label="ตำแหน่ง QR PromptPay">
+              <defs><pattern id="stripeQR" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#F1EFEB"></rect><rect width="4" height="8" fill="#E7E4DE"></rect></pattern></defs>
+              <rect width="176" height="176" fill="url(#stripeQR)"></rect>
+              <text x="88" y="92" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8C948F">PromptPay QR</text>
+            </svg>
+          </div>
+          <div style="margin-top:16px;text-align:center;font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em">{{ payAmountText }}</div>
+          <div onClick="{{ confirmPay }}" style="margin-top:16px;height:50px;border-radius:15px;background:#1F6F5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#175647">ยืนยันว่าโอนแล้ว</div>
+          <div onClick="{{ closePay }}" style="margin-top:8px;height:44px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#7C8783;cursor:pointer">ปิด</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ hasToast }}">
+        <div style="position:absolute;left:16px;right:16px;bottom:96px;z-index:90;background:#16201C;color:#fff;border-radius:14px;padding:13px 16px;font-size:13.5px;text-align:center;box-shadow:0 12px 28px rgba(16,24,20,.28)">{{ toast }}</div>
+      </sc-if>
+
+    </div>
+
+  </x-import>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:840,&quot;height&quot;:1010},&quot;tripName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;เชียงใหม่ 3 วัน 2 คืน&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;เนื้อหา&quot;},&quot;showDecimals&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;การแสดงตัวเลข&quot;}}">
+const GREEN = '#1F6F5C', RED = '#B3452B', INK = '#16201C', MUTED = '#8C948F';
+
+const MEMBERS = [
+  { id: 'me', name: 'ฟ้า (คุณ)', short: 'ฟ้า', ini: 'ฟ', bg: '#1F6F5C', phone: '' },
+  { id: 'boss', name: 'บอส', short: 'บอส', ini: 'บ', bg: '#3E5C8A', phone: '08x-xxx-4471' },
+  { id: 'mint', name: 'มิ้นท์', short: 'มิ้นท์', ini: 'ม', bg: '#8A5A3E', phone: '09x-xxx-2210' },
+  { id: 'ta', name: 'ต้า', short: 'ต้า', ini: 'ต', bg: '#5E6B3C', phone: '06x-xxx-8853' },
+];
+
+const CATS = [
+  { id: 'stay', name: 'ที่พัก', letter: 'พ' },
+  { id: 'food', name: 'อาหาร', letter: 'อ' },
+  { id: 'move', name: 'เดินทาง', letter: 'ท' },
+  { id: 'fun', name: 'เที่ยว', letter: 'ก' },
+  { id: 'etc', name: 'อื่นๆ', letter: '•' },
+];
+
+const SEED = [
+  { id: 'e1', title: 'ที่พัก Nimman Loft 2 คืน', cat: 'stay', amount: 4800, payer: 'mint', involved: ['me', 'boss', 'mint', 'ta'], day: 'วันที่ 1 · 10 ต.ค.' },
+  { id: 'e2', title: 'เช่ารถ + น้ำมัน', cat: 'move', amount: 2150, payer: 'boss', involved: ['me', 'boss', 'mint', 'ta'], day: 'วันที่ 1 · 10 ต.ค.' },
+  { id: 'e3', title: 'หมูกระทะ ริมปิง', cat: 'food', amount: 1280, payer: 'me', involved: ['me', 'boss', 'mint', 'ta'], day: 'วันที่ 1 · 10 ต.ค.' },
+  { id: 'e4', title: 'ตั๋วดอยอินทนนท์', cat: 'fun', amount: 900, payer: 'ta', involved: ['me', 'boss', 'mint', 'ta'], day: 'วันที่ 2 · 11 ต.ค.' },
+  { id: 'e5', title: 'คาเฟ่ + ของฝาก', cat: 'etc', amount: 640, payer: 'me', involved: ['me', 'mint'], day: 'วันที่ 2 · 11 ต.ค.' },
+  { id: 'e6', title: 'ซุปเปอร์ + เบียร์', cat: 'food', amount: 1100, payer: 'boss', involved: ['me', 'boss', 'mint', 'ta'], day: 'วันที่ 2 · 11 ต.ค.' },
+  { id: 'e7', title: 'แท็กซี่ไปสนามบิน', cat: 'move', amount: 480, payer: 'ta', involved: ['me', 'boss', 'mint', 'ta'], day: 'วันที่ 3 · 12 ต.ค.' },
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: 'trips', tab: 'list', expenses: SEED, settled: [],
+    payTo: null, toast: null,
+    draft: null,
+  };
+
+  // ── helpers ───────────────────────────────────────────────
+  member(id) { return MEMBERS.find(m => m.id === id) || MEMBERS[0]; }
+  dec() { return this.props.showDecimals ?? true; }
+  fmt(n) {
+    const d = this.dec() && Math.abs(n % 1) > 0.001 ? 2 : 0;
+    return '฿' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  signed(n) { return (n > 0.005 ? '+' : n < -0.005 ? '−' : '') + this.fmt(n); }
+
+  shares(e) {
+    const out = {};
+    if (e.exact) { e.involved.forEach(id => { out[id] = Number(e.exact[id] || 0); }); return out; }
+    const per = e.amount / Math.max(1, e.involved.length);
+    e.involved.forEach(id => { out[id] = per; });
+    return out;
+  }
+
+  ledger() {
+    const paid = {}, owe = {};
+    MEMBERS.forEach(m => { paid[m.id] = 0; owe[m.id] = 0; });
+    this.state.expenses.forEach(e => {
+      paid[e.payer] += e.amount;
+      const s = this.shares(e);
+      Object.keys(s).forEach(id => { owe[id] += s[id]; });
+    });
+    const net = {};
+    MEMBERS.forEach(m => { net[m.id] = paid[m.id] - owe[m.id]; });
+    this.state.settled.forEach(s => { net[s.from] += s.amount; net[s.to] -= s.amount; });
+    return { paid, owe, net };
+  }
+
+  plan() {
+    const { net } = this.ledger();
+    const debt = MEMBERS.filter(m => net[m.id] < -0.01).map(m => ({ id: m.id, v: -net[m.id] })).sort((a, b) => b.v - a.v);
+    const cred = MEMBERS.filter(m => net[m.id] > 0.01).map(m => ({ id: m.id, v: net[m.id] })).sort((a, b) => b.v - a.v);
+    const out = [];
+    let i = 0, j = 0;
+    while (i < debt.length && j < cred.length) {
+      const amt = Math.min(debt[i].v, cred[j].v);
+      if (amt > 0.01) out.push({ from: debt[i].id, to: cred[j].id, amount: amt });
+      debt[i].v -= amt; cred[j].v -= amt;
+      if (debt[i].v < 0.01) i++;
+      if (cred[j].v < 0.01) j++;
+    }
+    return out;
+  }
+
+  toast(msg) {
+    this.setState({ toast: msg });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: null }), 2200);
+  }
+
+  newDraft() {
+    return { amount: '', title: '', cat: 'food', payer: 'me', involved: ['me', 'boss', 'mint', 'ta'], type: 'equal', exact: {} };
+  }
+  patch(p) { this.setState(s => ({ draft: Object.assign({}, s.draft, p) })); }
+
+  press(k) {
+    const d = this.state.draft; if (!d) return;
+    let a = d.amount;
+    if (k === 'del') a = a.slice(0, -1);
+    else if (k === '.') { if (!a.includes('.')) a = (a || '0') + '.'; }
+    else { if (a.includes('.') && a.split('.')[1].length >= 2) return; if (a.replace('.', '').length >= 8) return; a = a === '0' ? k : a + k; }
+    this.patch({ amount: a });
+  }
+
+  saveDraft() {
+    const d = this.state.draft;
+    const amt = Number(d.amount) || 0;
+    if (amt <= 0) { this.toast('ใส่จำนวนเงินก่อนนะ'); return; }
+    if (!d.involved.length) { this.toast('เลือกคนที่ร่วมหารอย่างน้อย 1 คน'); return; }
+    const e = {
+      id: 'x' + Date.now(), title: d.title.trim() || (CATS.find(c => c.id === d.cat) || {}).name, cat: d.cat,
+      amount: amt, payer: d.payer, involved: d.involved.slice(), day: 'วันที่ 3 · 12 ต.ค.',
+    };
+    if (d.type === 'exact') {
+      const sum = d.involved.reduce((t, id) => t + (Number(d.exact[id]) || 0), 0);
+      if (Math.abs(sum - amt) > 0.01) { this.toast('ยอดที่ระบุรวมกันยังไม่เท่ากับ ' + this.fmt(amt)); return; }
+      e.exact = Object.assign({}, d.exact);
+    }
+    this.setState(s => ({ expenses: s.expenses.concat([e]), screen: 'trip', tab: 'list', draft: null }));
+    this.toast('บันทึก ' + e.title + ' · ' + this.fmt(amt));
+  }
+
+  // ── render values ─────────────────────────────────────────
+  renderVals() {
+    const s = this.state;
+    const L = this.ledger();
+    const transfers = this.plan();
+    const myNet = L.net.me;
+    const total = s.expenses.reduce((t, e) => t + e.amount, 0);
+
+    const groups = [];
+    s.expenses.forEach(e => {
+      let g = groups.find(x => x.label === e.day);
+      if (!g) { g = { label: e.day, items: [], sum: 0 }; groups.push(g); }
+      const sh = this.shares(e);
+      const mine = sh.me || 0;
+      const delta = (e.payer === 'me' ? e.amount : 0) - mine;
+      g.sum += e.amount;
+      g.items.push({
+        title: e.title, letter: (CATS.find(c => c.id === e.cat) || CATS[4]).letter,
+        sub: this.member(e.payer).short + ' จ่าย · หาร ' + e.involved.length + ' คน' + (e.exact ? ' (ระบุจำนวน)' : ''),
+        amountText: this.fmt(e.amount),
+        deltaText: Math.abs(delta) < 0.01 ? '—' : (delta > 0 ? 'ได้คืน ' : 'ค้าง ') + this.fmt(delta),
+        deltaColor: Math.abs(delta) < 0.01 ? MUTED : (delta > 0 ? GREEN : RED),
+      });
+    });
+    groups.forEach(g => { g.sumText = this.fmt(g.sum); });
+
+    const balanceRows = MEMBERS.map(m => {
+      const n = L.net[m.id];
+      return {
+        name: m.name, ini: m.ini, bg: m.bg,
+        paidText: this.fmt(L.paid[m.id]), shareText: this.fmt(L.owe[m.id]),
+        netText: this.signed(n), color: Math.abs(n) < 0.01 ? MUTED : (n > 0 ? GREEN : RED),
+        label: Math.abs(n) < 0.01 ? 'เคลียร์แล้ว' : (n > 0 ? 'ควรได้คืน' : 'ต้องจ่ายเพิ่ม'),
+      };
+    });
+
+    const trips = [
+      { id: 'cnx', name: 'เชียงใหม่ 3 วัน 2 คืน', dates: '10–12 ต.ค. 2568', count: 4, net: myNet, progress: transfers.length ? '35%' : '100%', open: () => this.setState({ screen: 'trip', tab: 'list' }) },
+      { id: 'pai', name: 'ปาย ปีใหม่', dates: '29 ธ.ค. – 1 ม.ค.', count: 6, net: 0, progress: '0%', open: () => this.toast('ทริปนี้ยังไม่เริ่มบันทึกค่าใช้จ่าย') },
+      { id: 'lipe', name: 'เกาะหลีเป๊ะ', dates: '3–6 เม.ย. 2568', count: 5, net: 0, progress: '100%', open: () => this.toast('ทริปนี้เคลียร์ครบแล้ว') },
+    ].map(t => Object.assign(t, {
+      netText: Math.abs(t.net) < 0.01 ? '฿0' : this.signed(t.net),
+      netColor: Math.abs(t.net) < 0.01 ? MUTED : (t.net > 0 ? GREEN : RED),
+      netLabel: Math.abs(t.net) < 0.01 ? 'เคลียร์แล้ว' : (t.net > 0 ? 'ควรได้คืน' : 'ค้างจ่าย'),
+    }));
+
+    const d = s.draft || this.newDraft();
+    const dAmt = Number(d.amount) || 0;
+    const isExact = d.type === 'exact';
+    const perHead = d.involved.length ? dAmt / d.involved.length : 0;
+    const exactSum = d.involved.reduce((t, id) => t + (Number(d.exact[id]) || 0), 0);
+    const remain = dAmt - exactSum;
+
+    const keypad = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['.', '0', 'del']].map(row => ({
+      keys: row.map(k => ({
+        label: k === 'del' ? '⌫' : k, press: () => this.press(k),
+        bg: k === 'del' ? '#E5E2DC' : '#fff', fg: INK,
+      })),
+    }));
+
+    const payMember = s.payTo ? this.member(s.payTo.to) : null;
+
+    return {
+      isTrips: s.screen === 'trips', isTrip: s.screen === 'trip', isAdd: s.screen === 'add', isSettle: s.screen === 'settle',
+      isPay: !!s.payTo, isList: s.tab === 'list', isBalances: s.tab === 'balances',
+      hasToast: !!s.toast, toast: s.toast,
+      members: MEMBERS, tripName: this.props.tripName ?? 'เชียงใหม่ 3 วัน 2 คืน',
+      trips, groups, balanceRows,
+      expenseCount: s.expenses.length, totalText: this.fmt(total),
+      myNetAbs: this.fmt(myNet), myNetSigned: this.signed(myNet),
+      myNetColor: Math.abs(myNet) < 0.01 ? MUTED : (myNet > 0 ? GREEN : RED),
+      myNetColorOnDark: Math.abs(myNet) < 0.01 ? '#fff' : (myNet > 0 ? '#7FD3B8' : '#F0A08A'),
+      myNetLabel: Math.abs(myNet) < 0.01 ? 'ไม่มียอดค้าง' : (myNet > 0 ? 'คุณควรได้รับคืน' : 'คุณค้างจ่ายเพื่อน'),
+
+      tabListColor: s.tab === 'list' ? INK : MUTED, tabListBorder: s.tab === 'list' ? GREEN : 'transparent',
+      tabBalColor: s.tab === 'balances' ? INK : MUTED, tabBalBorder: s.tab === 'balances' ? GREEN : 'transparent',
+      showList: () => this.setState({ tab: 'list' }), showBalances: () => this.setState({ tab: 'balances' }),
+      goTrips: () => this.setState({ screen: 'trips' }),
+      backToTrip: () => this.setState({ screen: 'trip' }),
+      openAdd: () => this.setState({ screen: 'add', draft: this.newDraft() }),
+      cancelAdd: () => this.setState({ screen: 'trip', draft: null }),
+      openSettle: () => this.setState({ screen: 'settle' }),
+      noop: () => this.toast('เมนูจัดการทริปยังไม่ได้ทำในโปรโตไทป์'),
+
+      transfers: transfers.map(t => ({
+        fromName: t.from === 'me' ? 'คุณ' : this.member(t.from).short,
+        toName: t.to === 'me' ? 'คุณ' : this.member(t.to).short,
+        fromIni: this.member(t.from).ini, toIni: this.member(t.to).ini,
+        fromBg: this.member(t.from).bg, toBg: this.member(t.to).bg,
+        amountText: this.fmt(t.amount),
+        note: t.from === 'me' ? 'โอนแล้วกดยืนยันเพื่อตัดยอด' : 'รอ ' + this.member(t.from).short + ' โอน · เตือนได้',
+        btnLabel: t.from === 'me' ? 'โอนด้วย PromptPay' : 'ส่งข้อความเตือน',
+        btnBg: t.from === 'me' ? GREEN : '#fff',
+        btnFg: t.from === 'me' ? '#fff' : INK,
+        btnBorder: t.from === 'me' ? GREEN : 'rgba(22,32,28,.14)',
+        act: () => {
+          if (t.from === 'me') this.setState({ payTo: t });
+          else this.toast('เตือน ' + this.member(t.from).short + ' แล้ว · ยอด ' + this.fmt(t.amount));
+        },
+      })),
+      transferCount: transfers.length, naiveCount: MEMBERS.length * (MEMBERS.length - 1) / 2,
+      allSettled: transfers.length === 0,
+
+      payToName: payMember ? payMember.short : '', payToPhone: payMember ? payMember.phone : '',
+      payAmountText: s.payTo ? this.fmt(s.payTo.amount) : '',
+      closePay: () => this.setState({ payTo: null }),
+      confirmPay: () => {
+        const t = s.payTo;
+        this.setState(st => ({ settled: st.settled.concat([{ from: t.from, to: t.to, amount: t.amount }]), payTo: null }));
+        this.toast('ตัดยอดแล้ว · โอนให้ ' + this.member(t.to).short + ' ' + this.fmt(t.amount));
+      },
+
+      draftAmountText: d.amount ? '฿' + Number(d.amount).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (d.amount.endsWith('.') ? '.' : '') : '฿0',
+      draftAmountColor: dAmt > 0 ? INK : '#C3C8C5',
+      draftTitle: d.title,
+      setTitle: (ev) => this.patch({ title: ev.target.value }),
+      saveColor: dAmt > 0 ? GREEN : '#C3C8C5',
+      saveDraft: () => this.saveDraft(),
+      keypad,
+      cats: CATS.map(c => ({
+        name: c.name, pick: () => this.patch({ cat: c.id }),
+        bg: d.cat === c.id ? '#EDF2F0' : '#fff', fg: d.cat === c.id ? GREEN : '#5E6A65',
+        border: d.cat === c.id ? 'rgba(31,111,92,.4)' : 'rgba(22,32,28,.12)',
+      })),
+      payerChoices: MEMBERS.map(m => ({
+        short: m.id === 'me' ? 'คุณ' : m.short, ini: m.ini, avatarBg: m.bg,
+        pick: () => this.patch({ payer: m.id }),
+        bg: d.payer === m.id ? '#EDF2F0' : '#fff', fg: d.payer === m.id ? GREEN : '#5E6A65',
+        border: d.payer === m.id ? 'rgba(31,111,92,.45)' : 'rgba(22,32,28,.1)',
+      })),
+      isExact, isEqual: !isExact,
+      eqBg: isExact ? 'transparent' : '#fff', eqFg: isExact ? '#7C8783' : INK, eqShadow: isExact ? 'none' : '0 1px 2px rgba(22,32,28,.14)',
+      exBg: isExact ? '#fff' : 'transparent', exFg: isExact ? INK : '#7C8783', exShadow: isExact ? '0 1px 2px rgba(22,32,28,.14)' : 'none',
+      setEqual: () => this.patch({ type: 'equal' }), setExact: () => this.patch({ type: 'exact' }),
+      remainText: !isExact ? (d.involved.length ? 'คนละ ' + this.fmt(perHead) : 'ยังไม่เลือกคน') : (Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + this.fmt(remain) : 'เกินมา ' + this.fmt(remain))),
+      remainColor: !isExact ? '#7C8783' : (Math.abs(remain) < 0.01 ? GREEN : RED),
+      splitRows: MEMBERS.map(m => {
+        const on = d.involved.includes(m.id);
+        return {
+          name: m.id === 'me' ? 'คุณ' : m.name, ini: m.ini, bg: m.bg,
+          check: on ? '✓' : '', boxBg: on ? GREEN : 'transparent', boxBorder: on ? GREEN : 'rgba(22,32,28,.22)',
+          opacity: on ? '1' : '.35', nameColor: on ? INK : '#A2A9A5',
+          amountText: on ? this.fmt(perHead) : '—', amountColor: on ? INK : '#C3C8C5',
+          exactValue: d.exact[m.id] == null ? '' : String(d.exact[m.id]),
+          setExact: (ev) => this.patch({ exact: Object.assign({}, d.exact, { [m.id]: ev.target.value.replace(/[^0-9.]/g, '') }) }),
+          toggle: () => this.patch({ involved: on ? d.involved.filter(x => x !== m.id) : d.involved.concat([m.id]) }),
+        };
+      }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
