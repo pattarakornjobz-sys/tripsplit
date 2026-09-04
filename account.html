@@ -68,18 +68,43 @@
       </div>
     </div>
 
-    <div class="qr-toggle" id="qrToggle">
-      <div class="qr-art" style="width:46px;height:46px;flex-shrink:0;"></div>
-      <div style="flex:1;">
-        <div style="font-size:14px;font-weight:600;color:var(--ink);">QR PromptPay ของฉัน</div>
-        <div style="margin-top:2px;font-size:11.5px;color:var(--faint);">ให้เพื่อนสแกนจ่ายได้เลย ไม่ต้องพิมพ์เลขบัญชี</div>
+    <div class="section-label">QR รับเงิน (1:1)</div>
+    <input type="file" id="qrFile" accept="image/*" style="display:none;">
+    <div class="qr-drop" id="qrDrop">
+      <img id="qrImg" alt="QR รับเงินของฉัน" style="display:none;">
+      <div class="plus" id="qrPlus">+</div>
+      <div class="hint" id="qrHint">แนบรูป QR รับเงินจากแอพธนาคาร<br>ระบบจะครอบเป็นสี่เหลี่ยมจัตุรัสให้อัตโนมัติ</div>
+    </div>
+    <div class="qr-actions" id="qrActions" style="display:none;">
+      <button type="button" id="qrReplace">เปลี่ยนรูป</button>
+      <button type="button" class="danger" id="qrRemove">ลบรูป</button>
+    </div>
+
+    <div class="section-label">ช่องทางที่สะดวกรับเงิน</div>
+    <div class="rows" id="prefRows">
+      <div class="pick" data-method="promptpay" role="radio" aria-checked="false">
+        <div class="pick-dot"><i></i></div>
+        <div style="flex:1;min-width:0;">
+          <div class="pick-title">พร้อมเพย์ · เบอร์โทร</div>
+          <div class="pick-sub" id="prefPhoneSub">—</div>
+        </div>
       </div>
-      <div id="qrChevron" style="color:var(--faint);font-size:15px;">⌄</div>
+      <div class="pick" data-method="bank" role="radio" aria-checked="false">
+        <div class="pick-dot"><i></i></div>
+        <div style="flex:1;min-width:0;">
+          <div class="pick-title">โอนเข้าบัญชีธนาคาร</div>
+          <div class="pick-sub" id="prefBankSub">—</div>
+        </div>
+      </div>
+      <div class="pick" data-method="qr" role="radio" aria-checked="false">
+        <div class="pick-dot"><i></i></div>
+        <div style="flex:1;min-width:0;">
+          <div class="pick-title">สแกน QR</div>
+          <div class="pick-sub" id="prefQrSub">—</div>
+        </div>
+      </div>
     </div>
-    <div class="qr-box" id="qrBox" style="display:none;">
-      <div class="qr-art" style="width:180px;height:180px;margin:0 auto;">PROMPTPAY QR</div>
-      <div style="margin-top:12px;font-size:12.5px;color:var(--muted);" id="qrCaption"></div>
-    </div>
+    <div style="margin-top:8px;font-size:11.5px;line-height:1.6;color:var(--faint);">เลือกได้ 1 อย่าง — เพื่อนร่วมทริปจะเห็นช่องทางนี้ขึ้นก่อนเสมอตอนกดโอนให้คุณ</div>
 
     <div class="section-label">การแสดงผล</div>
     <div class="rows" style="padding:15px 16px;">
@@ -151,7 +176,7 @@ const BANKS = [
 ];
 
 let ME = null;
-let P = { nickname: '', display_name: '', email: '', phone: '', bank_code: 'scb', bank_account: '', account_holder: '' };
+let P = { nickname: '', display_name: '', email: '', phone: '', bank_code: 'scb', bank_account: '', account_holder: '', qr_url: '', pay_method: null };
 let show = { phone: false, acct: false };
 
 function bankOf(code) { return BANKS.find(b => b.id === code) || BANKS[0]; }
@@ -174,6 +199,8 @@ async function load() {
     bank_code: row.bank_code || 'scb',
     bank_account: row.bank_account || '',
     account_holder: row.account_holder || '',
+    qr_url: row.qr_url || '',
+    pay_method: row.pay_method || null,
     avatar_url: row.avatar_url || meta.avatar_url || meta.picture || null,
   };
   paint();
@@ -200,7 +227,48 @@ function paint() {
   document.getElementById('holderValue').textContent = P.account_holder || '—';
   document.getElementById('phoneEye').textContent = show.phone ? '⌣' : '⌢';
   document.getElementById('acctEye').textContent = show.acct ? '⌣' : '⌢';
-  document.getElementById('qrCaption').textContent = name + (P.phone ? ' · ' + maskDigits(P.phone, 4) : '');
+  paintQr();
+  paintPref();
+}
+
+function paintQr() {
+  const img = document.getElementById('qrImg');
+  const drop = document.getElementById('qrDrop');
+  const has = !!P.qr_url;
+  img.style.display = has ? 'block' : 'none';
+  if (has) img.src = P.qr_url;
+  drop.classList.toggle('has-img', has);
+  document.getElementById('qrPlus').style.display = has ? 'none' : 'flex';
+  document.getElementById('qrHint').style.display = has ? 'none' : 'block';
+  document.getElementById('qrActions').style.display = has ? 'flex' : 'none';
+}
+
+function paintPref() {
+  const pref = P.pay_method || payMethodOf(P);
+  const subs = {
+    promptpay: P.phone ? maskDigits(P.phone, 4) : 'ยังไม่ได้ใส่เบอร์ — กด “แก้ไข”',
+    bank: P.bank_account ? bankOf(P.bank_code).name + ' · ' + maskDigits(P.bank_account, 4) : 'ยังไม่ได้ใส่เลขบัญชี — กด “แก้ไข”',
+    qr: P.qr_url ? 'แนบรูป QR แล้ว' : 'ยังไม่ได้แนบรูป QR',
+  };
+  const ready = { promptpay: !!P.phone, bank: !!P.bank_account, qr: !!P.qr_url };
+  document.getElementById('prefPhoneSub').textContent = subs.promptpay;
+  document.getElementById('prefBankSub').textContent = subs.bank;
+  document.getElementById('prefQrSub').textContent = subs.qr;
+  document.querySelectorAll('#prefRows .pick').forEach(el => {
+    const m = el.dataset.method;
+    el.setAttribute('aria-checked', String(m === pref));
+    el.setAttribute('aria-disabled', String(!ready[m]));
+  });
+}
+
+async function setPref(method) {
+  const ready = { promptpay: !!P.phone, bank: !!P.bank_account, qr: !!P.qr_url };
+  if (!ready[method]) { toast('กรอกข้อมูลช่องทางนี้ก่อนถึงจะเลือกได้'); return; }
+  const { error } = await sb.from('profiles').update({ pay_method: method }).eq('id', ME.id);
+  if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); return; }
+  P.pay_method = method;
+  paintPref();
+  toast('ตั้งเป็นช่องทางที่สะดวกแล้ว · ' + PAY_METHODS[method].label);
 }
 
 /* ---- copy / reveal ---- */
@@ -211,11 +279,42 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('acctCopy').addEventListener('click', () => copyText(P.bank_account, 'เลขบัญชี'));
   document.getElementById('holderCopy').addEventListener('click', () => copyText(P.account_holder, 'ชื่อบัญชี'));
 
-  document.getElementById('qrToggle').addEventListener('click', () => {
-    const box = document.getElementById('qrBox');
-    const open = box.style.display === 'none';
-    box.style.display = open ? 'block' : 'none';
-    document.getElementById('qrChevron').textContent = open ? '⌃' : '⌄';
+  const qrFile = document.getElementById('qrFile');
+  document.getElementById('qrDrop').addEventListener('click', () => qrFile.click());
+  document.getElementById('qrReplace').addEventListener('click', (e) => { e.stopPropagation(); qrFile.click(); });
+  document.getElementById('qrRemove').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!confirm('ลบรูป QR นี้?')) return;
+    await removeQrImage(ME.id);
+    const patch = { qr_url: null };
+    if (P.pay_method === 'qr') patch.pay_method = null;
+    await sb.from('profiles').update(patch).eq('id', ME.id);
+    P.qr_url = ''; if (patch.pay_method === null) P.pay_method = payMethodOf(P);
+    paint();
+    toast('ลบรูป QR แล้ว');
+  });
+  qrFile.addEventListener('change', async () => {
+    const f = qrFile.files && qrFile.files[0];
+    qrFile.value = '';
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { toast('ต้องเป็นไฟล์รูปภาพ'); return; }
+    toast('กำลังอัปโหลดรูป QR...');
+    try {
+      const url = await uploadQrImage(ME.id, f);
+      const patch = { qr_url: url };
+      if (!P.pay_method) patch.pay_method = 'qr';
+      const { error } = await sb.from('profiles').update(patch).eq('id', ME.id);
+      if (error) throw error;
+      P.qr_url = url; if (patch.pay_method) P.pay_method = patch.pay_method;
+      paint();
+      toast('อัปโหลด QR แล้ว · ครอบเป็น 1:1 ให้เรียบร้อย');
+    } catch (err) {
+      toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err));
+    }
+  });
+
+  document.querySelectorAll('#prefRows .pick').forEach(el => {
+    el.addEventListener('click', () => setPref(el.dataset.method));
   });
 
   document.getElementById('btnSignOut').addEventListener('click', () => { if (confirm('ออกจากระบบ?')) signOut(); });

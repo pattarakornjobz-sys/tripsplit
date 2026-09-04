@@ -336,3 +336,147 @@ async function copyText(value, label) {
     toast('คัดลอกไม่สำเร็จ — กดค้างที่ตัวเลขเพื่อคัดลอกเอง');
   }
 }
+
+/* ---------- Payment methods ---------- */
+const PAY_METHODS = {
+  promptpay: { label: 'พร้อมเพย์', icon: '฿' },
+  bank: { label: 'โอนเข้าบัญชี', icon: 'B' },
+  qr: { label: 'สแกน QR', icon: 'Q' },
+};
+
+const BANK_NAMES = {
+  scb: 'ไทยพาณิชย์', kbank: 'กสิกรไทย', ktb: 'กรุงไทย', bbl: 'กรุงเทพ',
+  bay: 'กรุงศรี', ttb: 'ทีทีบี', gsb: 'ออมสิน', other: 'ธนาคาร',
+};
+
+// Which method the person actually ticked, falling back to whatever they filled in.
+function payMethodOf(p) {
+  p = p || {};
+  if (p.pay_method === 'qr' && p.qr_url) return 'qr';
+  if (p.pay_method === 'bank' && p.bank_account) return 'bank';
+  if (p.pay_method === 'promptpay' && p.phone) return 'promptpay';
+  if (p.qr_url) return 'qr';
+  if (p.bank_account) return 'bank';
+  if (p.phone) return 'promptpay';
+  return null;
+}
+
+function payMethodSummary(p) {
+  const m = payMethodOf(p);
+  if (!m) return 'ยังไม่ได้ตั้งช่องทางรับเงิน';
+  if (m === 'qr') return 'สะดวกรับผ่าน QR';
+  if (m === 'bank') return 'สะดวกรับเข้าบัญชี ' + (BANK_NAMES[p.bank_code] || 'ธนาคาร');
+  return 'สะดวกรับผ่านพร้อมเพย์';
+}
+
+// Bottom sheet: how this person prefers to be paid. amount/currency optional.
+function openPayeeSheet(p, amount, currency) {
+  p = p || {};
+  const name = p.nickname || p.display_name || 'เพื่อนร่วมทริป';
+  const pref = payMethodOf(p);
+  const rows = [];
+
+  if (p.phone) rows.push({
+    key: 'promptpay', label: 'พร้อมเพย์ · เบอร์โทร', value: p.phone, copyLabel: 'เบอร์',
+  });
+  if (p.bank_account) rows.push({
+    key: 'bank', label: (BANK_NAMES[p.bank_code] || 'ธนาคาร') + ' · เลขที่บัญชี', value: p.bank_account,
+    copyLabel: 'เลขบัญชี', extra: p.account_holder ? 'ชื่อบัญชี ' + p.account_holder : '',
+  });
+
+  const order = rows.slice().sort((a, b) => (a.key === pref ? -1 : b.key === pref ? 1 : 0));
+
+  const rowHtml = order.map(r => `
+    <div class="row" style="padding-left:0;padding-right:0;">
+      <div class="row-body">
+        <div class="row-label">${r.label}${r.key === pref ? ' <span class="tag-pref">สะดวกสุด</span>' : ''}</div>
+        <div class="row-value" data-full="${r.value}">${maskDigits(r.value, 4)}</div>
+        ${r.extra ? '<div style="margin-top:3px;font-size:11.5px;color:var(--faint);">' + r.extra + '</div>' : ''}
+      </div>
+      <button class="icon-btn" data-reveal>⌢</button>
+      <button class="copy-btn" data-copy="${r.value}" data-copylabel="${r.copyLabel}">คัดลอก</button>
+    </div>`).join('');
+
+  const qrHtml = p.qr_url ? `
+    <div style="margin-top:14px;">
+      <div class="row-label" style="margin-bottom:7px;">QR รับเงิน${pref === 'qr' ? ' <span class="tag-pref">สะดวกสุด</span>' : ''}</div>
+      <img src="${p.qr_url}" alt="QR รับเงินของ ${name}" class="pay-sheet-qr">
+      <a href="${p.qr_url}" target="_blank" rel="noopener" style="display:block;margin-top:8px;text-align:center;font-size:12.5px;font-weight:600;">เปิดรูปเต็ม / บันทึกรูป</a>
+    </div>` : '';
+
+  const body = (rows.length || p.qr_url)
+    ? rowHtml + qrHtml
+    : '<div class="empty">' + escapeHtmlSafe(name) + ' ยังไม่ได้ใส่ช่องทางรับเงิน<br>ทักไปบอกให้เปิดหน้า “บัญชี” แล้วกรอกก่อนนะ</div>';
+
+  const sheet = document.createElement('div');
+  sheet.className = 'modal-bg';
+  sheet.innerHTML = `
+    <div class="modal-sheet">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:4px;">
+        <div style="flex:1;min-width:0;">
+          <h3 style="margin:0;">โอนให้ ${escapeHtmlSafe(name)}</h3>
+          <div style="margin-top:3px;font-size:12px;color:var(--faint);">${payMethodSummary(p)}</div>
+        </div>
+        ${amount != null ? '<div style="font-size:20px;font-weight:600;color:var(--ink);white-space:nowrap;">' + money(amount, currency) + '</div>' : ''}
+      </div>
+      <div style="margin-top:10px;">${body}</div>
+      <button class="btn btn-outline" data-close style="margin-top:16px;border-radius:25px;">ปิด</button>
+    </div>`;
+
+  sheet.addEventListener('click', (e) => {
+    if (e.target === sheet || e.target.hasAttribute('data-close')) { sheet.remove(); return; }
+    const rev = e.target.closest('[data-reveal]');
+    if (rev) {
+      const val = rev.parentElement.querySelector('.row-value');
+      const full = val.dataset.full;
+      const hidden = val.textContent.indexOf('\u2022') >= 0;
+      val.textContent = hidden ? full : maskDigits(full, 4);
+      rev.textContent = hidden ? '⌣' : '⌢';
+      return;
+    }
+    const cp = e.target.closest('[data-copy]');
+    if (cp) copyText(cp.dataset.copy, cp.dataset.copylabel);
+  });
+  document.body.appendChild(sheet);
+}
+
+function escapeHtmlSafe(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+/* ---------- QR image: center-crop to 1:1 and upload ---------- */
+async function squareCropBlob(file, size) {
+  size = size || 720;
+  const bitmap = await new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+  const side = Math.min(bitmap.width, bitmap.height);
+  const sx = (bitmap.width - side) / 2;
+  const sy = (bitmap.height - side) / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, size, size);
+  URL.revokeObjectURL(bitmap.src);
+  return await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+}
+
+async function uploadQrImage(userId, file) {
+  const blob = await squareCropBlob(file, 720);
+  const path = userId + '.jpg';
+  const { error } = await sb.storage.from('qr').upload(path, blob, {
+    upsert: true, contentType: 'image/jpeg', cacheControl: '3600',
+  });
+  if (error) throw error;
+  const { data } = sb.storage.from('qr').getPublicUrl(path);
+  return data.publicUrl + '?v=' + Date.now();
+}
+
+async function removeQrImage(userId) {
+  await sb.storage.from('qr').remove([userId + '.jpg']);
+}

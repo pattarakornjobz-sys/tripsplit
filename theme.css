@@ -31,6 +31,43 @@ html[data-theme="dark"]{
   color-scheme:dark;
 }
 
+/* ===== App shell: fixed bottom tab bar, only the content scrolls ===== */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
+.phone{height:100dvh;min-height:0;overflow:hidden;}
+.scroll{
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:calc(96px + env(safe-area-inset-bottom,0)) !important;
+}
+.tabbar{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:0;
+  width:100%;max-width:460px;
+  padding:8px 8px calc(env(safe-area-inset-bottom,0) + 8px);
+  z-index:50;
+}
+/* Sheets and the install card must sit above the fixed bar */
+.modal-bg{z-index:120;}
+
+/* Pages without a tab bar keep their own bottom action strip flush */
+.phone:not(:has(.tabbar)) .scroll{padding-bottom:24px !important;}
+
+/* ===== Everything tappable behaves like a button, not like text ===== */
+.tab,.card,.btn,.subtab,.pill,.copy-btn,.icon-btn,.qr-toggle,.headbar .back,
+.row-icon,.row-label,.row-value,.acct-name,.acct-badge,.seg button,.section-label,
+.topbar h1,.topbar .eyebrow,.tab-icon,.tab-label{
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.tab,.card,.btn,.subtab,.copy-btn,.icon-btn,.qr-toggle,.headbar .back,.seg button{
+  touch-action:manipulation;
+}
+.tab:active,.card:active,.qr-toggle:active{opacity:.72;}
+.copy-btn:active,.icon-btn:active,.headbar .back:active{transform:scale(.96);}
+.copy-btn,.icon-btn,.seg button,.btn{transition:transform .08s ease,background .12s ease;}
+/* Inputs stay selectable so people can still paste into them */
+input,textarea,select{-webkit-user-select:text;user-select:text;}
+
 /* Re-point the pieces style.css hard-coded to light values */
 html,body{background:var(--bg);color:var(--ink);}
 html[data-theme="dark"] body{background:#0C100E;}
@@ -135,3 +172,44 @@ html[data-theme="dark"] .btn-google{background:#EAEFEC;color:#0A100D;border-colo
   display:flex;align-items:center;justify-content:center;color:var(--faint);
   font-size:10px;letter-spacing:.06em;
 }
+
+/* ===== QR upload (1:1) + preferred payment method ===== */
+.qr-drop{
+  position:relative;width:100%;aspect-ratio:1/1;border-radius:18px;overflow:hidden;
+  background:var(--fill);border:1px dashed var(--border-strong);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  cursor:pointer;text-align:center;padding:20px;
+}
+.qr-drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.qr-drop.has-img{border-style:solid;background:#fff;}
+.qr-drop .hint{font-size:12.5px;line-height:1.55;color:var(--faint);max-width:16em;}
+.qr-drop .plus{
+  width:44px;height:44px;border-radius:22px;background:var(--green-tint);color:var(--green-text);
+  display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:500;
+}
+.qr-actions{margin-top:8px;display:flex;gap:8px;}
+.qr-actions button{flex:1;height:40px;border-radius:20px;border:1px solid var(--border-strong);
+  background:var(--card);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;}
+.qr-actions button.danger{color:var(--red);border-color:rgba(179,69,43,.35);}
+
+.pick{
+  padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;
+}
+.pick + .pick{border-top:1px solid var(--border);}
+.pick-dot{
+  width:22px;height:22px;flex-shrink:0;border-radius:50%;border:1.5px solid var(--border-strong);
+  display:flex;align-items:center;justify-content:center;
+}
+.pick[aria-checked="true"] .pick-dot{border-color:var(--green);background:var(--green);}
+.pick-dot i{width:8px;height:8px;border-radius:50%;background:#fff;display:none;}
+.pick[aria-checked="true"] .pick-dot i{display:block;}
+.pick-title{font-size:14.5px;font-weight:500;color:var(--ink);}
+.pick-sub{margin-top:2px;font-size:11.5px;color:var(--faint);}
+.pick[aria-checked="true"] .pick-title{color:var(--green-text);font-weight:600;}
+.pick[aria-disabled="true"]{opacity:.45;}
+
+.tag-pref{
+  display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+  background:var(--green-tint);color:var(--green-text);font-size:10.5px;font-weight:600;
+}
+.pay-sheet-qr{width:100%;aspect-ratio:1/1;border-radius:16px;object-fit:cover;background:var(--fill);}

@@ -71,7 +71,7 @@ async function load() {
 async function fetchAll() {
   const { data: trip } = await sb.from('trips').select('*').eq('id', tripId).single();
   TRIP = trip;
-  const { data: members } = await sb.from('trip_members').select('user_id, role, profile:profiles(id,display_name,avatar_url,email)').eq('trip_id', tripId);
+  const { data: members } = await sb.from('trip_members').select('user_id, role, profile:profiles(id,display_name,avatar_url,email,nickname,phone,bank_code,bank_account,account_holder,qr_url,pay_method)').eq('trip_id', tripId);
   MEMBERS = members || [];
   const { data: invites } = await sb.from('trip_invites').select('*').eq('trip_id', tripId).eq('status', 'pending');
   INVITES = invites || [];
@@ -189,15 +189,28 @@ function renderSummary() {
     </div>`;
   }).join('');
 
-  const transferRows = transfers.length ? transfers.map((tr, i) => `
+  const transferRows = transfers.length ? transfers.map((tr, i) => {
+    const payee = P(tr.to);
+    const payeeName = payee.nickname || payee.display_name;
+    const fromName = P(tr.from).nickname || P(tr.from).display_name;
+    return `
     <div class="card card-static">
       <div style="display:flex;align-items:center;gap:10px;">
         ${avatarHtml(P(tr.from), 30)}
-        <div style="font-size:13px;color:var(--ink);flex:1;">${escapeHtml(P(tr.from).display_name)} → ${escapeHtml(P(tr.to).display_name)}</div>
+        <div style="font-size:13px;color:var(--ink);flex:1;">${escapeHtml(fromName)} → ${escapeHtml(payeeName)}</div>
         <div style="font-size:14.5px;font-weight:600;color:var(--ink);">${money(tr.amount, TRIP.currency)}</div>
       </div>
-      ${tr.from === ME.id ? `<button class="btn btn-primary" data-confirm="${i}" style="height:38px;margin-top:10px;font-size:13px;">ยืนยันว่าโอนแล้ว</button>` : `<div style="margin-top:8px;font-size:11.5px;color:var(--faint);">รอ ${escapeHtml(P(tr.from).display_name)} โอน</div>`}
-    </div>`).join('') : '<div class="empty">ยอดลงตัวแล้ว ไม่มีใครติดใคร 🎉</div>';
+      <div data-payee="${i}" style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:13px;background:var(--fill);cursor:pointer;">
+        <div class="row-icon" style="width:32px;height:32px;border-radius:11px;font-size:13px;">${payMethodOf(payee) ? PAY_METHODS[payMethodOf(payee)].icon : '?'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12.5px;font-weight:600;color:var(--ink);">${escapeHtml(payeeName)} ${payMethodSummary(payee)}</div>
+          <div style="margin-top:2px;font-size:11px;color:var(--faint);">แตะเพื่อดูเลข / QR แล้วคัดลอกไปโอน</div>
+        </div>
+        <div style="color:var(--faint);font-size:15px;">›</div>
+      </div>
+      ${tr.from === ME.id ? `<button class="btn btn-primary" data-confirm="${i}" style="height:38px;margin-top:10px;font-size:13px;">ยืนยันว่าโอนแล้ว</button>` : `<div style="margin-top:8px;font-size:11.5px;color:var(--faint);">รอ ${escapeHtml(fromName)} โอน</div>`}
+    </div>`;
+  }).join('') : '<div class="empty">ยอดลงตัวแล้ว ไม่มีใครติดใคร 🎉</div>';
 
   window.__transfers = transfers;
 
@@ -235,6 +248,10 @@ function bindTabEvents() {
     toast('เพิ่มคำเชิญแล้ว');
     await fetchAll(); render();
   });
+  document.querySelectorAll('[data-payee]').forEach(el => el.addEventListener('click', () => {
+    const tr = window.__transfers[+el.dataset.payee];
+    openPayeeSheet(P(tr.to), tr.amount, TRIP.currency);
+  }));
   document.querySelectorAll('[data-confirm]').forEach(btn => btn.addEventListener('click', async () => {
     const tr = window.__transfers[+btn.dataset.confirm];
     btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
