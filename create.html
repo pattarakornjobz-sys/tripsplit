@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>สร้างทริปใหม่ — Trip Split</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+</head>
+<body>
+<div class="phone">
+  <div class="headbar">
+    <div class="back" id="btnBack">←</div>
+    <div class="title">สร้างทริปใหม่</div>
+  </div>
+
+  <div class="scroll">
+    <div class="field">
+      <label>ชื่อทริป</label>
+      <input id="fName" type="text" placeholder="เช่น เที่ยวเชียงใหม่">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <div class="field" style="flex:1;">
+        <label>วันเริ่ม</label>
+        <input id="fStart" type="date">
+      </div>
+      <div class="field" style="flex:1;">
+        <label>วันจบ</label>
+        <input id="fEnd" type="date">
+      </div>
+    </div>
+    <div class="field">
+      <label>สกุลเงิน</label>
+      <select id="fCurrency">
+        <option value="THB">THB — บาท</option>
+        <option value="USD">USD — ดอลลาร์</option>
+        <option value="JPY">JPY — เยน</option>
+        <option value="EUR">EUR — ยูโร</option>
+      </select>
+    </div>
+
+    <div class="section-label">เชิญเพื่อน (ไม่บังคับตอนนี้)</div>
+    <div style="display:flex;gap:8px;">
+      <input id="fEmail" type="email" placeholder="อีเมล Gmail ของเพื่อน" style="flex:1;height:46px;border-radius:12px;border:1px solid var(--border);padding:0 14px;font-size:14px;">
+      <button id="btnAddEmail" class="btn btn-outline" style="width:70px;height:46px;">เพิ่ม</button>
+    </div>
+    <div id="emailList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+    <div style="margin-top:8px;font-size:12px;line-height:1.6;color:var(--faint);">เพื่อนต้องล็อกอินด้วย Gmail ของตัวเองก่อนถึงจะเข้าร่วมทริปได้ — ระบบจะสร้างลิงก์เชิญให้หลังบันทึกทริปเสร็จ</div>
+
+    <button id="btnSubmit" class="btn btn-primary" style="margin-top:24px;">สร้างทริป</button>
+  </div>
+</div>
+
+<script>
+let ME = null;
+let invites = [];
+
+async function load() {
+  ME = await requireAuth();
+  if (!ME) return;
+  document.getElementById('btnBack').addEventListener('click', () => history.back());
+  document.getElementById('btnAddEmail').addEventListener('click', addEmail);
+  document.getElementById('btnSubmit').addEventListener('click', submit);
+}
+
+function addEmail() {
+  const input = document.getElementById('fEmail');
+  const v = input.value.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast('ใส่อีเมลให้ถูกรูปแบบก่อนนะ'); return; }
+  if (invites.includes(v)) { input.value = ''; return; }
+  invites.push(v);
+  input.value = '';
+  renderEmails();
+}
+
+function renderEmails() {
+  document.getElementById('emailList').innerHTML = invites.map((e, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:13px;">
+      <span>${e}</span><span data-i="${i}" class="rm" style="color:var(--red);cursor:pointer;">ลบ</span>
+    </div>`).join('');
+  document.querySelectorAll('.rm').forEach(el => el.addEventListener('click', () => { invites.splice(+el.dataset.i, 1); renderEmails(); }));
+}
+
+async function submit() {
+  const name = document.getElementById('fName').value.trim();
+  const start = document.getElementById('fStart').value;
+  const end = document.getElementById('fEnd').value;
+  const currency = document.getElementById('fCurrency').value;
+  if (!name) { toast('ใส่ชื่อทริปก่อนนะ'); return; }
+
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+
+  const invite_code = genCode(6);
+  const { data: trip, error } = await sb.from('trips').insert({
+    name, start_date: start || null, end_date: end || null, currency,
+    owner_id: ME.id, invite_code,
+  }).select().single();
+
+  if (error) { toast('สร้างทริปไม่สำเร็จ: ' + error.message); btn.disabled = false; btn.textContent = 'สร้างทริป'; return; }
+
+  await sb.from('trip_members').insert({ trip_id: trip.id, user_id: ME.id, role: 'owner' });
+
+  if (invites.length) {
+    await sb.from('trip_invites').insert(invites.map(email => ({ trip_id: trip.id, email })));
+  }
+
+  toast('สร้างทริปแล้ว');
+  location.href = 'trip.html?id=' + trip.id + '&tab=members';
+}
+
+load();
+</script>
+</body>
+</html>

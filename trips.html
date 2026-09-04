@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ทริปของฉัน — Trip Split</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+</head>
+<body>
+<div class="phone">
+  <div class="topbar" style="display:flex;align-items:flex-end;justify-content:space-between;">
+    <div>
+      <div class="eyebrow" id="hello">สวัสดี</div>
+      <h1>ทริปของฉัน</h1>
+    </div>
+    <div id="meAvatar" class="avatar" style="width:36px;height:36px;font-size:14px;"></div>
+  </div>
+
+  <div class="scroll" id="scroll">
+    <button class="btn btn-primary" id="btnNew" style="margin-top:4px;">+ สร้างทริปใหม่</button>
+
+    <div id="joinBox" style="display:none;margin-top:12px;padding:12px 14px;border-radius:14px;background:rgba(31,111,92,.1);font-size:13px;color:var(--green-d);">
+      มีลิงก์เชิญค้างอยู่ — <a href="#" id="joinLink" style="font-weight:600;">กดเพื่อเข้าร่วมทริป</a>
+    </div>
+
+    <div class="section-label">กำลังดำเนินอยู่</div>
+    <div id="openList"><div class="empty">กำลังโหลด...</div></div>
+  </div>
+
+  <div class="tabbar" id="tabbar"></div>
+</div>
+
+<script>
+let ME = null;
+
+async function load() {
+  ME = await requireAuth();
+  if (!ME) return;
+  renderTabBar('trips');
+
+  const meta = ME.user_metadata || {};
+  const name = meta.full_name || meta.name || ME.email.split('@')[0];
+  document.getElementById('hello').textContent = 'สวัสดี ' + name.split(' ')[0];
+  const av = document.getElementById('meAvatar');
+  if (meta.avatar_url || meta.picture) {
+    av.style.background = 'transparent';
+    av.innerHTML = '<img src="' + (meta.avatar_url || meta.picture) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+  } else {
+    av.style.background = avatarColor(ME.id);
+    av.textContent = initials(name);
+  }
+
+  const pendingCode = localStorage.getItem('ts_pending_code');
+  if (pendingCode) {
+    document.getElementById('joinBox').style.display = 'block';
+    document.getElementById('joinLink').href = 'join.html?code=' + pendingCode;
+  }
+
+  document.getElementById('btnNew').addEventListener('click', () => location.href = 'create.html');
+
+  const { data: memberRows, error } = await sb
+    .from('trip_members')
+    .select('trip_id, trips!inner(id,name,start_date,end_date,currency,status,owner_id,invite_code)')
+    .eq('user_id', ME.id)
+    .eq('trips.status', 'open');
+
+  const list = document.getElementById('openList');
+  if (error) { list.innerHTML = '<div class="empty">โหลดไม่สำเร็จ: ' + error.message + '</div>'; return; }
+  const trips = (memberRows || []).map(r => r.trips).filter(Boolean);
+
+  if (!trips.length) {
+    list.innerHTML = '<div class="empty">ยังไม่มีทริปที่เปิดอยู่<br>กด “สร้างทริปใหม่” เพื่อเริ่มต้น</div>';
+    return;
+  }
+
+  // member counts
+  const ids = trips.map(t => t.id);
+  const { data: counts } = await sb.from('trip_members').select('trip_id').in('trip_id', ids);
+  const countMap = {};
+  (counts || []).forEach(c => countMap[c.trip_id] = (countMap[c.trip_id] || 0) + 1);
+
+  list.innerHTML = trips.map(t => `
+    <div class="card" data-id="${t.id}">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:15.5px;font-weight:600;color:var(--ink);">${escapeHtml(t.name)}</div>
+          <div style="margin-top:3px;font-size:12px;color:var(--faint);">${fmtDateRange(t.start_date, t.end_date)} · ${countMap[t.id] || 1} คน${t.owner_id === ME.id ? ' · คุณเป็นเจ้าของ' : ''}</div>
+        </div>
+        <span class="pill pill-open">เปิดอยู่</span>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', () => location.href = 'trip.html?id=' + el.dataset.id);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+load();
+</script>
+</body>
+</html>

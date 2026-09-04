@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>เข้าร่วมทริป — Trip Split</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+</head>
+<body>
+<div class="phone">
+  <div class="headbar">
+    <div class="back" id="btnBack">←</div>
+    <div class="title">เข้าร่วมทริป</div>
+  </div>
+  <div class="center-page" id="content">กำลังตรวจสอบลิงก์เชิญ...</div>
+</div>
+
+<script>
+async function load() {
+  const code = qs('code');
+  document.getElementById('btnBack').addEventListener('click', () => location.href = 'trips.html');
+  if (!code) { document.getElementById('content').textContent = 'ลิงก์เชิญไม่ถูกต้อง'; return; }
+
+  const ME = await requireAuth();
+  if (!ME) return;
+  localStorage.removeItem('ts_pending_code');
+
+  const { data: preview, error } = await sb.rpc('trip_preview_by_code', { p_code: code });
+  const trip = preview && preview[0];
+  if (error || !trip) {
+    document.getElementById('content').innerHTML = 'ลิงก์เชิญนี้ใช้ไม่ได้แล้ว หรือทริปปิดไปแล้ว<br><br><a href="trips.html">กลับไปหน้าทริปของฉัน</a>';
+    return;
+  }
+
+  document.getElementById('content').innerHTML = `
+    <div style="width:64px;height:64px;border-radius:20px;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:600;margin-bottom:18px;">฿</div>
+    <div style="font-size:12px;color:var(--faint);">คุณได้รับเชิญให้เข้าร่วมทริป</div>
+    <h2 style="margin:6px 0 2px;font-size:22px;color:var(--ink);">${escapeHtml(trip.name)}</h2>
+    <div style="font-size:13px;color:var(--muted);">${fmtDateRange(trip.start_date, trip.end_date)} · ${trip.member_count} คนแล้ว</div>
+    <button id="btnJoin" class="btn btn-primary" style="margin-top:26px;">เข้าร่วมทริปนี้</button>
+  `;
+  document.getElementById('btnJoin').addEventListener('click', async () => {
+    const btn = document.getElementById('btnJoin');
+    btn.disabled = true; btn.textContent = 'กำลังเข้าร่วม...';
+    const { data: tripId, error: joinErr } = await sb.rpc('join_trip_by_code', { p_code: code });
+    if (joinErr) { toast('เข้าร่วมไม่สำเร็จ: ' + joinErr.message); btn.disabled = false; btn.textContent = 'เข้าร่วมทริปนี้'; return; }
+    location.href = 'trip.html?id=' + tripId;
+  });
+}
+
+function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+load();
+</script>
+</body>
+</html>
