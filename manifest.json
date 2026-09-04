@@ -1,0 +1,17 @@
+{
+  "name": "TripSplit by nisijobz",
+  "short_name": "TripSplit",
+  "description": "หารค่าใช้จ่ายทริปกับเพื่อน ให้แอพคำนวณว่าใครโอนให้ใครเท่าไร",
+  "start_url": "/trips.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EFEDE8",
+  "theme_color": "#16201C",
+  "lang": "th",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -179,3 +179,89 @@ function renderTabBar(active) {
 function signOutConfirm() {
   if (confirm('ออกจากระบบ?')) signOut();
 }
+
+/* ---------- PWA install ---------- */
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+let __deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  __deferredInstallPrompt = e;
+});
+
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isIOSDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+
+// Call this once, right after a successful login, on a page that has an
+// empty <div id="installPromptRoot"></div> somewhere in its markup.
+function maybeShowInstallPrompt() {
+  if (isStandaloneApp()) return;
+  if (localStorage.getItem('ts_install_dismissed') === '1') return;
+  const root = document.getElementById('installPromptRoot');
+  if (!root) return;
+
+  if (isIOSDevice()) {
+    renderInstallCard(root, {
+      body: 'แตะปุ่ม แชร์ (สี่เหลี่ยมมีลูกศรชี้ขึ้น) ที่แถบด้านล่างของ Safari แล้วเลือก “เพิ่มไปที่หน้าจอโฮม”',
+      showButton: false,
+    });
+    return;
+  }
+
+  if (__deferredInstallPrompt) {
+    showAndroidInstallCard(root);
+  } else {
+    // beforeinstallprompt may not have fired yet — give it a moment.
+    const handler = () => { showAndroidInstallCard(root); };
+    window.addEventListener('beforeinstallprompt', handler, { once: true });
+    setTimeout(() => window.removeEventListener('beforeinstallprompt', handler), 5000);
+  }
+}
+
+function showAndroidInstallCard(root) {
+  renderInstallCard(root, {
+    body: 'ติดตั้งไว้ที่หน้าจอโฮม เปิดใช้งานได้เร็วเหมือนแอพจริง',
+    showButton: true,
+    onInstall: async () => {
+      if (!__deferredInstallPrompt) return;
+      __deferredInstallPrompt.prompt();
+      await __deferredInstallPrompt.userChoice;
+      __deferredInstallPrompt = null;
+      root.innerHTML = '';
+    },
+  });
+}
+
+function renderInstallCard(root, opts) {
+  root.innerHTML = `
+    <div style="position:fixed;left:0;right:0;bottom:0;z-index:200;padding:0 14px calc(env(safe-area-inset-bottom,0) + 14px);">
+      <div style="max-width:432px;margin:0 auto;background:#16201C;color:#fff;border-radius:16px;padding:14px 14px 14px 12px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 34px rgba(0,0,0,.3);">
+        <img src="icons/icon-192.png" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13.5px;font-weight:600;">ติดตั้ง TripSplit</div>
+          <div style="margin-top:2px;font-size:11.5px;line-height:1.5;color:rgba(255,255,255,.68);">${opts.body}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+          ${opts.showButton ? '<button id="tsInstallBtn" style="height:32px;padding:0 14px;border:none;border-radius:9px;background:#1F6F5C;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">ติดตั้ง</button>' : ''}
+          <div id="tsInstallDismiss" style="text-align:center;font-size:11px;color:rgba(255,255,255,.5);cursor:pointer;">ไม่ใช่ตอนนี้</div>
+        </div>
+      </div>
+    </div>`;
+  const dismiss = document.getElementById('tsInstallDismiss');
+  if (dismiss) dismiss.addEventListener('click', () => {
+    localStorage.setItem('ts_install_dismissed', '1');
+    root.innerHTML = '';
+  });
+  const btn = document.getElementById('tsInstallBtn');
+  if (btn && opts.onInstall) btn.addEventListener('click', opts.onInstall);
+}

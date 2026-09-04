@@ -3,7 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ทริปของฉัน — Trip Split</title>
+<title>ทริปของฉัน — TripSplit</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#16201C">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TripSplit">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
@@ -17,6 +24,7 @@
     </div>
     <div id="meAvatar" class="avatar" style="width:36px;height:36px;font-size:14px;"></div>
   </div>
+  <div id="installPromptRoot"></div>
 
   <div class="scroll" id="scroll">
     <button class="btn btn-primary" id="btnNew" style="margin-top:4px;">+ สร้างทริปใหม่</button>
@@ -95,6 +103,8 @@ async function load() {
   list.querySelectorAll('.card').forEach(el => {
     el.addEventListener('click', () => location.href = 'trip.html?id=' + el.dataset.id);
   });
+
+  maybeShowInstallPrompt();
 }
 
 function escapeHtml(s) {
