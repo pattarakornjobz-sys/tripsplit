@@ -30,6 +30,16 @@
 </div>
 <script>
 (async function(){
+  const url = new URL(location.href);
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const errDesc = hashParams.get('error_description') || url.searchParams.get('error_description')
+    || hashParams.get('error') || url.searchParams.get('error');
+  if (errDesc) {
+    console.error('OAuth error:', errDesc);
+    alert('ล็อกอินไม่สำเร็จ: ' + decodeURIComponent(errDesc));
+    history.replaceState(null, '', location.pathname);
+  }
+
   const { data: { session } } = await sb.auth.getSession();
   const code = qs('code');
   if (code) localStorage.setItem('ts_pending_code', code);

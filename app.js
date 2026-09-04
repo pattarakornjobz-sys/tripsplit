@@ -70,12 +70,39 @@ function toast(msg) {
 /* ---------- Auth ---------- */
 
 async function requireAuth() {
-  const { data: { session } } = await sb.auth.getSession();
+  // Surface a real OAuth error instead of silently bouncing back to login.
+  const url = new URL(location.href);
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const errDesc = hashParams.get('error_description') || url.searchParams.get('error_description')
+    || hashParams.get('error') || url.searchParams.get('error');
+  if (errDesc) {
+    console.error('OAuth error:', errDesc);
+    alert('ล็อกอินไม่สำเร็จ: ' + decodeURIComponent(errDesc));
+  }
+
+  let { data: { session } } = await sb.auth.getSession();
+
+  // Right after the Google redirect, supabase-js may still be parsing the
+  // URL / exchanging the code for a session. Give it a short grace window
+  // via onAuthStateChange instead of bouncing to the login page immediately.
+  if (!session && (url.searchParams.get('code') || hashParams.get('access_token'))) {
+    session = await new Promise((resolve) => {
+      const { data: sub } = sb.auth.onAuthStateChange((_event, s) => {
+        if (s) { sub.subscription.unsubscribe(); resolve(s); }
+      });
+      setTimeout(() => { sub.subscription.unsubscribe(); resolve(null); }, 3000);
+    });
+  }
+
   if (!session) {
     const pending = qs('code');
     if (pending) localStorage.setItem('ts_pending_code', pending);
     location.href = 'index.html';
     return null;
+  }
+  // Clean the auth tokens/code out of the visible URL now that we have a session.
+  if (url.hash || url.searchParams.get('code')) {
+    history.replaceState(null, '', location.pathname);
   }
   await ensureProfile(session.user);
   return session.user;
