@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>บัญชีของฉัน — TripSplit</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#EFEDE8" id="themeColorMeta">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TripSplit">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+<script>initTheme();</script>
+</head>
+<body>
+<div class="phone">
+  <div class="topbar" style="display:flex;align-items:flex-end;justify-content:space-between;">
+    <div>
+      <div class="eyebrow">บัญชีของฉัน</div>
+      <h1>โปรไฟล์</h1>
+    </div>
+    <button class="copy-btn ghost" id="btnEdit" style="height:38px;border-radius:20px;padding:0 16px;font-size:13px;background:var(--green-tint);color:var(--green-text);">แก้ไข</button>
+  </div>
+
+  <div class="scroll" id="scroll">
+
+    <div class="acct-hero">
+      <div class="avatar" id="meAvatar"></div>
+      <div style="flex:1;min-width:0;">
+        <div class="acct-name" id="meName">—</div>
+        <div class="acct-email" id="meEmail"></div>
+        <div class="acct-badge"><i>G</i>ยืนยันด้วย Gmail</div>
+      </div>
+    </div>
+
+    <div class="note">ชื่อเล่นและช่องทางรับเงินนี้จะแสดงให้ <strong>เพื่อนร่วมทริปเท่านั้น</strong> เห็นเฉพาะเลขท้าย 4 ตัว และกดคัดลอกได้โดยไม่ต้องเปิดเผยเลขทั้งหมด</div>
+
+    <div class="section-label">ช่องทางรับเงิน</div>
+    <div class="rows" id="payRows">
+      <div class="row">
+        <div class="row-icon">฿</div>
+        <div class="row-body">
+          <div class="row-label">PromptPay · เบอร์โทร</div>
+          <div class="row-value" id="phoneValue">—</div>
+        </div>
+        <button class="icon-btn" id="phoneEye" aria-label="แสดง/ซ่อนเบอร์โทร">⌢</button>
+        <button class="copy-btn" id="phoneCopy">คัดลอก</button>
+      </div>
+      <div class="row">
+        <div class="row-icon neutral" id="bankShort">—</div>
+        <div class="row-body">
+          <div class="row-label" id="bankLabel">ธนาคาร</div>
+          <div class="row-value" id="acctValue">—</div>
+        </div>
+        <button class="icon-btn" id="acctEye" aria-label="แสดง/ซ่อนเลขบัญชี">⌢</button>
+        <button class="copy-btn" id="acctCopy">คัดลอก</button>
+      </div>
+      <div class="row">
+        <div class="row-body" style="font-size:12.5px;line-height:1.5;color:var(--muted);">
+          ชื่อบัญชี <span id="holderValue" style="color:var(--ink);font-weight:500;">—</span>
+        </div>
+        <button class="copy-btn ghost" id="holderCopy">คัดลอกชื่อ</button>
+      </div>
+    </div>
+
+    <div class="qr-toggle" id="qrToggle">
+      <div class="qr-art" style="width:46px;height:46px;flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink);">QR PromptPay ของฉัน</div>
+        <div style="margin-top:2px;font-size:11.5px;color:var(--faint);">ให้เพื่อนสแกนจ่ายได้เลย ไม่ต้องพิมพ์เลขบัญชี</div>
+      </div>
+      <div id="qrChevron" style="color:var(--faint);font-size:15px;">⌄</div>
+    </div>
+    <div class="qr-box" id="qrBox" style="display:none;">
+      <div class="qr-art" style="width:180px;height:180px;margin:0 auto;">PROMPTPAY QR</div>
+      <div style="margin-top:12px;font-size:12.5px;color:var(--muted);" id="qrCaption"></div>
+    </div>
+
+    <div class="section-label">การแสดงผล</div>
+    <div class="rows" style="padding:15px 16px;">
+      <div style="font-size:14px;font-weight:600;color:var(--ink);">โหมดสี</div>
+      <div class="seg" id="themeSeg">
+        <button data-mode="light">สว่าง</button>
+        <button data-mode="dark">มืด</button>
+        <button data-mode="auto">ตามระบบ</button>
+      </div>
+      <div style="margin-top:10px;font-size:11.5px;line-height:1.55;color:var(--faint);">จำค่าไว้ในเครื่องนี้ · “ตามระบบ” จะเปลี่ยนตามการตั้งค่ามือถือ</div>
+    </div>
+
+    <button class="btn btn-danger" id="btnSignOut" style="margin-top:22px;border-radius:24px;">ออกจากระบบ</button>
+    <div style="margin-top:14px;text-align:center;font-size:11px;line-height:1.6;color:var(--disabled);">TripSplit · Supabase + Vercel</div>
+  </div>
+
+  <div class="tabbar" id="tabbar"></div>
+</div>
+
+<div class="modal-bg" id="editModal" style="display:none;">
+  <div class="modal-sheet">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div id="editCancel" style="font-size:13.5px;color:var(--faint);cursor:pointer;width:52px;">ยกเลิก</div>
+      <h3 style="margin:0;">แก้ไขโปรไฟล์</h3>
+      <div style="width:52px;"></div>
+    </div>
+
+    <div class="field">
+      <label for="fNick">ชื่อเล่นที่แสดงในทริป</label>
+      <input id="fNick" placeholder="เช่น ฟ้า" maxlength="24">
+      <div style="margin-top:6px;font-size:11px;color:var(--faint);">เพื่อนในทริปจะเห็นชื่อนี้แทนชื่อจากบัญชี Google</div>
+    </div>
+
+    <div class="field">
+      <label for="fPhone">เบอร์โทร (ใช้เป็น PromptPay)</label>
+      <input id="fPhone" inputmode="numeric" placeholder="081-234-5678" maxlength="14">
+    </div>
+
+    <div class="field">
+      <label>ธนาคาร</label>
+      <div id="bankChips" style="display:flex;flex-wrap:wrap;gap:7px;"></div>
+    </div>
+
+    <div class="field">
+      <label for="fAcct">เลขที่บัญชี</label>
+      <input id="fAcct" inputmode="numeric" placeholder="123-4-56789-0" maxlength="18">
+      <div id="acctHint" style="margin-top:6px;font-size:11px;color:var(--faint);"></div>
+    </div>
+
+    <div class="field">
+      <label for="fHolder">ชื่อบัญชี</label>
+      <input id="fHolder" placeholder="ชื่อ-นามสกุลตามหน้าบัญชี" maxlength="60">
+    </div>
+
+    <button class="btn btn-primary" id="btnSave" style="border-radius:25px;">บันทึกโปรไฟล์</button>
+  </div>
+</div>
+
+<script>
+const BANKS = [
+  { id: 'scb', name: 'ไทยพาณิชย์', short: 'SCB' },
+  { id: 'kbank', name: 'กสิกรไทย', short: 'KBank' },
+  { id: 'ktb', name: 'กรุงไทย', short: 'KTB' },
+  { id: 'bbl', name: 'กรุงเทพ', short: 'BBL' },
+  { id: 'bay', name: 'กรุงศรี', short: 'BAY' },
+  { id: 'ttb', name: 'ทีทีบี', short: 'ttb' },
+  { id: 'gsb', name: 'ออมสิน', short: 'GSB' },
+  { id: 'other', name: 'อื่นๆ', short: 'BANK' },
+];
+
+let ME = null;
+let P = { nickname: '', display_name: '', email: '', phone: '', bank_code: 'scb', bank_account: '', account_holder: '' };
+let show = { phone: false, acct: false };
+
+function bankOf(code) { return BANKS.find(b => b.id === code) || BANKS[0]; }
+
+async function load() {
+  ME = await requireAuth();
+  if (!ME) return;
+  renderTabBar('profile');
+  renderThemeSeg();
+
+  const { data, error } = await sb.from('profiles').select('*').eq('id', ME.id).single();
+  if (error) { toast('โหลดโปรไฟล์ไม่สำเร็จ: ' + error.message); }
+  const meta = ME.user_metadata || {};
+  const row = data || {};
+  P = {
+    nickname: row.nickname || '',
+    display_name: row.display_name || meta.full_name || meta.name || ME.email.split('@')[0],
+    email: row.email || ME.email,
+    phone: row.phone || '',
+    bank_code: row.bank_code || 'scb',
+    bank_account: row.bank_account || '',
+    account_holder: row.account_holder || '',
+    avatar_url: row.avatar_url || meta.avatar_url || meta.picture || null,
+  };
+  paint();
+}
+
+function paint() {
+  const name = P.nickname || P.display_name;
+  document.getElementById('meName').textContent = name;
+  document.getElementById('meEmail').textContent = P.email;
+  const av = document.getElementById('meAvatar');
+  if (P.avatar_url) {
+    av.style.background = 'transparent';
+    av.innerHTML = '<img src="' + P.avatar_url + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+  } else {
+    av.style.background = avatarColor(ME.id);
+    av.textContent = initials(name);
+  }
+
+  const bank = bankOf(P.bank_code);
+  document.getElementById('bankShort').textContent = bank.short;
+  document.getElementById('bankLabel').textContent = bank.name + ' · บัญชีออมทรัพย์';
+  document.getElementById('phoneValue').textContent = P.phone ? (show.phone ? P.phone : maskDigits(P.phone, 4)) : 'ยังไม่ได้ใส่เบอร์';
+  document.getElementById('acctValue').textContent = P.bank_account ? (show.acct ? P.bank_account : maskDigits(P.bank_account, 4)) : 'ยังไม่ได้ใส่เลขบัญชี';
+  document.getElementById('holderValue').textContent = P.account_holder || '—';
+  document.getElementById('phoneEye').textContent = show.phone ? '⌣' : '⌢';
+  document.getElementById('acctEye').textContent = show.acct ? '⌣' : '⌢';
+  document.getElementById('qrCaption').textContent = name + (P.phone ? ' · ' + maskDigits(P.phone, 4) : '');
+}
+
+/* ---- copy / reveal ---- */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('phoneEye').addEventListener('click', () => { show.phone = !show.phone; paint(); });
+  document.getElementById('acctEye').addEventListener('click', () => { show.acct = !show.acct; paint(); });
+  document.getElementById('phoneCopy').addEventListener('click', () => copyText(P.phone, 'เบอร์'));
+  document.getElementById('acctCopy').addEventListener('click', () => copyText(P.bank_account, 'เลขบัญชี'));
+  document.getElementById('holderCopy').addEventListener('click', () => copyText(P.account_holder, 'ชื่อบัญชี'));
+
+  document.getElementById('qrToggle').addEventListener('click', () => {
+    const box = document.getElementById('qrBox');
+    const open = box.style.display === 'none';
+    box.style.display = open ? 'block' : 'none';
+    document.getElementById('qrChevron').textContent = open ? '⌃' : '⌄';
+  });
+
+  document.getElementById('btnSignOut').addEventListener('click', () => { if (confirm('ออกจากระบบ?')) signOut(); });
+  document.getElementById('btnEdit').addEventListener('click', openEdit);
+  document.getElementById('editCancel').addEventListener('click', closeEdit);
+  document.getElementById('editModal').addEventListener('click', (e) => { if (e.target.id === 'editModal') closeEdit(); });
+  document.getElementById('btnSave').addEventListener('click', save);
+  document.getElementById('fAcct').addEventListener('input', updateAcctHint);
+  load();
+});
+
+/* ---- edit sheet ---- */
+let formBank = 'scb';
+
+function openEdit() {
+  document.getElementById('fNick').value = P.nickname || P.display_name;
+  document.getElementById('fPhone').value = P.phone || '';
+  document.getElementById('fAcct').value = P.bank_account || '';
+  document.getElementById('fHolder').value = P.account_holder || '';
+  formBank = P.bank_code || 'scb';
+  renderBankChips();
+  updateAcctHint();
+  document.getElementById('editModal').style.display = 'flex';
+}
+function closeEdit() { document.getElementById('editModal').style.display = 'none'; }
+
+function renderBankChips() {
+  const box = document.getElementById('bankChips');
+  box.innerHTML = BANKS.map(b => {
+    const on = b.id === formBank;
+    return '<button type="button" data-bank="' + b.id + '" style="padding:9px 13px;border-radius:12px;font-size:13px;font-weight:500;cursor:pointer;'
+      + 'background:' + (on ? 'var(--green-tint)' : 'var(--input)') + ';'
+      + 'color:' + (on ? 'var(--green-text)' : 'var(--muted)') + ';'
+      + 'border:1px solid ' + (on ? 'rgba(31,111,92,.45)' : 'var(--border-strong)') + ';">' + b.name + '</button>';
+  }).join('');
+  box.querySelectorAll('button').forEach(el => el.addEventListener('click', () => {
+    formBank = el.dataset.bank; renderBankChips();
+  }));
+}
+
+function updateAcctHint() {
+  const v = document.getElementById('fAcct').value;
+  const d = v.replace(/[^0-9]/g, '');
+  document.getElementById('acctHint').textContent = d.length
+    ? 'ใส่แล้ว ' + d.length + '/10 หลัก · เพื่อนจะเห็นเป็น ' + maskDigits(v, 4)
+    : 'ระบบจะซ่อนเลขให้เอง เหลือเห็นแค่ 4 ตัวท้าย';
+}
+
+async function save() {
+  const nickname = document.getElementById('fNick').value.trim();
+  const phone = document.getElementById('fPhone').value.trim();
+  const bank_account = document.getElementById('fAcct').value.trim();
+  const account_holder = document.getElementById('fHolder').value.trim();
+  if (!nickname) { toast('ใส่ชื่อเล่นก่อนนะ'); return; }
+  const d = bank_account.replace(/[^0-9]/g, '');
+  if (d && d.length < 10) { toast('เลขบัญชีต้องมี 10 หลัก (ใส่แล้ว ' + d.length + ')'); return; }
+
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  const { error } = await sb.from('profiles')
+    .update({ nickname, phone, bank_code: formBank, bank_account, account_holder })
+    .eq('id', ME.id);
+  btn.disabled = false;
+  if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); return; }
+
+  P = Object.assign(P, { nickname, phone, bank_code: formBank, bank_account, account_holder });
+  closeEdit();
+  paint();
+  toast('บันทึกโปรไฟล์แล้ว · เพื่อนจะเห็นชื่อ “' + nickname + '”');
+}
+</script>
+</body>
+</html>

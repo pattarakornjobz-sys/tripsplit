@@ -58,7 +58,7 @@ function toast(msg) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'toast';
-    el.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#16201C;color:#fff;padding:11px 18px;border-radius:999px;font-size:13.5px;z-index:999;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:88%;text-align:center;opacity:0;transition:opacity .2s';
+    el.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--toast-bg,#16201C);color:var(--toast-fg,#fff);padding:11px 18px;border-radius:999px;font-size:13.5px;z-index:999;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:88%;text-align:center;opacity:0;transition:opacity .2s';
     document.body.appendChild(el);
   }
   el.textContent = msg;
@@ -161,7 +161,7 @@ function renderTabBar(active) {
   const tabs = [
     { id: 'trips', href: 'trips.html', label: 'ทริป', icon: '🧳' },
     { id: 'history', href: 'history.html', label: 'ประวัติ', icon: '🗂️' },
-    { id: 'profile', href: '#', label: 'บัญชี', icon: '⚙️' },
+    { id: 'profile', href: 'account.html', label: 'บัญชี', icon: '☺' },
   ];
   el.innerHTML = tabs.map(t => `
     <div class="tab ${t.id === active ? 'tab-active' : ''}" data-href="${t.href}">
@@ -264,4 +264,75 @@ function renderInstallCard(root, opts) {
   });
   const btn = document.getElementById('tsInstallBtn');
   if (btn && opts.onInstall) btn.addEventListener('click', opts.onInstall);
+}
+
+/* ---------- Theme (light / dark / auto) ---------- */
+// Call initTheme() in <head>, right after app.js, so the first paint is correct.
+function initTheme() {
+  applyTheme(localStorage.getItem('ts_theme') || 'auto');
+  if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => { if ((localStorage.getItem('ts_theme') || 'auto') === 'auto') applyTheme('auto'); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  }
+}
+
+function currentThemeMode() {
+  return localStorage.getItem('ts_theme') || 'auto';
+}
+
+function applyTheme(mode) {
+  const dark = mode === 'dark' || (mode === 'auto' && window.matchMedia
+    && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  localStorage.setItem('ts_theme', mode);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#0F1512' : '#EFEDE8');
+}
+
+// Renders the light / dark / auto segmented control into #themeSeg.
+function renderThemeSeg() {
+  const seg = document.getElementById('themeSeg');
+  if (!seg) return;
+  const sync = () => {
+    const mode = currentThemeMode();
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  };
+  seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    applyTheme(b.dataset.mode);
+    sync();
+  }));
+  sync();
+}
+
+/* ---------- Masking + clipboard ---------- */
+// maskDigits('123-4-56789-0', 4) -> '•••-•-•••89-0'  (separators kept)
+function maskDigits(value, keep) {
+  keep = keep || 4;
+  const chars = String(value || '').split('');
+  const total = chars.filter(c => /[0-9]/.test(c)).length;
+  let seen = 0;
+  return chars.map(c => {
+    if (!/[0-9]/.test(c)) return c;
+    seen++;
+    return seen > total - keep ? c : '•';
+  }).join('');
+}
+
+async function copyText(value, label) {
+  const v = String(value || '').trim();
+  if (!v) { toast('ยังไม่ได้ใส่' + (label || 'ข้อมูล') + ' — กด “แก้ไข” เพื่อเพิ่ม'); return; }
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(v);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = v; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    }
+    toast('คัดลอก' + (label || '') + 'แล้ว · ' + v);
+  } catch (e) {
+    toast('คัดลอกไม่สำเร็จ — กดค้างที่ตัวเลขเพื่อคัดลอกเอง');
+  }
 }
