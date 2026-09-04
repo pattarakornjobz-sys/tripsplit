@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#0C100E;font-family:"IBM Plex Sans Thai",system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:#5FC2A2}a:hover{color:#175647}input{font-family:inherit}*::-webkit-scrollbar{width:0;height:0}@keyframes livePulse{0%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}100%{opacity:.35;transform:scale(.8)}}</style></helmet>
+
+<div style="display:flex;gap:56px;align-items:flex-start;padding:48px 56px 72px">
+
+  <div style="width:330px;flex:none;padding-top:8px">
+    <div style="font:500 10.5px/1 'IBM Plex Mono',monospace;letter-spacing:.14em;color:#8E9A94;text-transform:uppercase">Prototype v2 · Android · โทนเข้ม · Supabase + Vercel</div>
+    <h1 style="margin:12px 0 0;font-size:27px;line-height:1.25;font-weight:600;color:#EAEFEC;letter-spacing:-.01em">แอพหารค่าใช้จ่ายทริป</h1>
+    <p style="margin:12px 0 0;font-size:13.5px;line-height:1.65;color:#9AA6A0;text-wrap:pretty">ครบทั้ง 5 ส่วนที่ขอ — ล็อกอิน Gmail, สร้างทริป + ลิงก์เชิญ, สมาชิกทริป, บันทึกค่าใช้จ่าย + ปิดทริป, สรุปเรียลไทม์ และประวัติทริป กดใช้งานได้จริงทุกหน้า</p>
+
+    <div style="margin-top:22px;padding:14px 15px;border-radius:14px;background:#19221E;border:1px solid rgba(255,255,255,.1);font-size:12.5px;line-height:1.6;color:#9AA6A0">เวอร์ชัน Android (Material 3): กรอบ 412×892, status bar + gesture nav อยู่ในโฟลว์จริง, ปุ่มหลักเป็นทรงแคปซูล, ปุ่มย้อนกลับใช้ ← ตามแพลตฟอร์ม, bottom sheet มุม 28px — สี ตัวอักษร และโฟลว์ทั้งหมดตรงกับเวอร์ชัน iOS</div>
+    <div style="margin-top:22px;padding-top:20px;border-top:1px solid rgba(255,255,255,.12)">
+      <div style="font:600 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#EAEFEC">5 หน้าจอตามที่สั่ง</div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:9px;font-size:12.5px;line-height:1.55;color:#9AA6A0">
+        <div><span style="color:#EAEFEC;font-weight:500">1 สร้างทริป</span> — ชื่อ วันเริ่ม–วันจบ สกุลเงิน + ลิงก์เชิญ/QR + เชิญด้วยอีเมล</div>
+        <div><span style="color:#EAEFEC;font-weight:500">2 ผู้ร่วมทริป</span> — แยกตามทริป ใครเข้ามาแล้ว ใครรอตอบรับ ใครเป็นเจ้าของ</div>
+        <div><span style="color:#EAEFEC;font-weight:500">3 บันทึกค่าใช้จ่าย</span> — ใครจ่าย จ่ายอะไร หารยังไง + ปุ่ม “ปิดทริป” (ปิดแล้วบันทึกเพิ่มไม่ได้)</div>
+        <div><span style="color:#EAEFEC;font-weight:500">4 สรุปเรียลไทม์</span> — จ่ายไปแล้วเท่าไร ส่วนแบ่งคนละเท่าไร ใครโอนให้ใคร</div>
+        <div><span style="color:#EAEFEC;font-weight:500">5 ประวัติทริป</span> — ทริปที่ปิดแล้ว ยอดรวม รายการทั้งหมด และสรุปการโอน</div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding-top:20px;border-top:1px solid rgba(255,255,255,.12)">
+      <div style="font:600 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#EAEFEC">แมปกับหลังบ้าน</div>
+      <div style="margin-top:12px;font:400 11.5px/1.75 'IBM Plex Mono',monospace;color:#9AA6A0">
+        <div>auth.users · Google OAuth (Gmail)</div>
+        <div>trips (id, name, start, end, status, owner)</div>
+        <div>trip_members (trip_id, user_id, role)</div>
+        <div>invites (trip_id, email, token, status)</div>
+        <div>expenses (trip_id, payer_id, amount, cat)</div>
+        <div>expense_shares (expense_id, user_id, amount)</div>
+        <div>settlements (trip_id, from, to, amount)</div>
+      </div>
+      <div style="margin-top:12px;font-size:12.5px;line-height:1.6;color:#9AA6A0">สรุปยอดอัปเดตสดผ่าน Realtime channel ของตาราง expenses · ลิงก์เชิญเป็น route <span style="font-family:'IBM Plex Mono',monospace">/join/[token]</span> บน Vercel · ปิดทริป = ตั้ง <span style="font-family:'IBM Plex Mono',monospace">status='closed'</span> แล้วให้ RLS ปฏิเสธ insert ใหม่</div>
+    </div>
+
+    <div style="margin-top:24px;padding-top:20px;border-top:1px solid rgba(255,255,255,.12)">
+      <div style="font:600 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#EAEFEC">ลองกดตามนี้</div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:1.5;color:#9AA6A0">
+        <div>1 · ล็อกอิน Gmail → ทริปของฉัน → ปุ่ม <span style="color:#5FC2A2;font-weight:500">สร้างทริปใหม่</span></div>
+        <div>2 · หน้าทริป → <span style="color:#5FC2A2;font-weight:500">สมาชิก</span> ดูคนที่เข้ามาแล้ว/รอตอบรับ</div>
+        <div>3 · <span style="color:#5FC2A2;font-weight:500">สรุป</span> → กด “จำลองเพื่อนบันทึกรายการ” เพื่อดูยอดขยับสด</div>
+        <div>4 · เมนู <span style="color:#5FC2A2;font-weight:500">ปิดทริป</span> → ลองกดเพิ่มรายการดูว่าถูกล็อก</div>
+        <div>5 · แท็บ <span style="color:#5FC2A2;font-weight:500">ประวัติ</span> → เกาะหลีเป๊ะ (ปิดแล้ว)</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex:none">
+  <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="412px,892px">
+
+    <div style="height:100%;display:flex;flex-direction:column;background:#0F1512;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#EAEFEC;position:relative;overflow:hidden">
+
+      <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:56px 26px 28px;background:#0A100D;color:#fff">
+          <div>
+            <div style="width:52px;height:52px;border-radius:16px;background:#1F6F5C;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600">฿</div>
+            <h2 style="margin:26px 0 0;font-size:31px;line-height:1.3;font-weight:600;letter-spacing:-.02em">หารค่าทริป<br />ให้จบในที่เดียว</h2>
+            <p style="margin:14px 0 0;font-size:14px;line-height:1.7;color:rgba(255,255,255,.62);text-wrap:pretty">บันทึกใครจ่ายอะไร แล้วให้แอพคำนวณว่าใครต้องโอนให้ใครเท่าไร อัปเดตสดทุกคนในทริป</p>
+          </div>
+          <div>
+            <div onClick="{{ signIn }}" style="height:54px;border-radius:26px;background:#EAEFEC;color:#0A100D;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#CFD6D2">
+              <div style="width:22px;height:22px;border-radius:11px;background:rgba(31,111,92,.2);color:#5FC2A2;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">G</div>
+              ดำเนินการต่อด้วย Gmail
+            </div>
+            <div style="margin-top:12px;height:50px;border-radius:26px;border:1px solid rgba(255,255,255,.24);display:flex;align-items:center;justify-content:center;font-size:14.5px;color:rgba(255,255,255,.8);cursor:pointer" onClick="{{ signIn }}">มีลิงก์เชิญอยู่แล้ว · เข้าร่วมทริป</div>
+            <div style="margin-top:18px;text-align:center;font-size:11.5px;line-height:1.6;color:rgba(255,255,255,.4)">ยืนยันตัวตนด้วยบัญชี Google ผ่าน Supabase Auth<br />ไม่มีการเก็บรหัสผ่านในแอพ</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTrips }}">
+        <div style="padding:22px 20px 6px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between">
+            <div>
+              <div style="font-size:12px;color:#8E9A94">สวัสดี {{ myShort }}</div>
+              <h2 style="margin:2px 0 0;font-size:26px;font-weight:600;letter-spacing:-.01em">ทริปของฉัน</h2>
+            </div>
+            <div style="width:34px;height:34px;border-radius:17px;background:#1F6F5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;cursor:pointer" onClick="{{ signOut }}">ฟ</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow:auto;padding:14px 16px 24px">
+          <div style="background:#232E29;border-radius:18px;padding:18px 18px 16px;color:#fff">
+            <div style="display:flex;align-items:center;gap:7px">
+              <div style="width:7px;height:7px;border-radius:4px;background:#7FD3B8;animation:livePulse 1.8s ease-in-out infinite"></div>
+              <div style="font-size:11.5px;color:rgba(255,255,255,.6)">ยอดสุทธิของคุณ · อัปเดตสด</div>
+            </div>
+            <div style="margin-top:6px;font-size:34px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:{{ myNetColorOnDark }}">{{ myNetSigned }}</div>
+            <div style="margin-top:4px;font-size:12.5px;color:rgba(255,255,255,.66)">{{ myNetLabel }} · จาก {{ openCount }} ทริปที่ยังเปิด</div>
+          </div>
+
+          <div style="margin:22px 0 10px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;color:#8E9A94;text-transform:uppercase">กำลังดำเนินอยู่</div>
+          <sc-for list="{{ openTrips }}" as="t" hint-placeholder-count="2">
+            <div onClick="{{ t.open }}" style="background:#19221E;border-radius:16px;padding:15px 16px;margin-bottom:10px;border:1px solid rgba(255,255,255,.09);cursor:pointer" style-hover="border-color:rgba(31,111,92,.45)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:15.5px;font-weight:600;letter-spacing:-.005em">{{ t.name }}</div>
+                  <div style="margin-top:3px;font-size:12px;color:#97A29D">{{ t.dates }} · {{ t.memberCount }} คน{{ t.pendingText }}</div>
+                </div>
+                <div style="text-align:right;flex:none">
+                  <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ t.netColor }}">{{ t.netText }}</div>
+                  <div style="margin-top:3px;font-size:11px;color:#8E9A94">{{ t.netLabel }}</div>
+                </div>
+              </div>
+              <div style="margin-top:11px;display:flex;align-items:center;gap:8px">
+                <div style="display:flex">
+                  <sc-for list="{{ t.avatars }}" as="a" hint-placeholder-count="4">
+                    <div style="width:24px;height:24px;border-radius:12px;background:{{ a.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;border:2px solid #19221E;margin-left:-7px">{{ a.ini }}</div>
+                  </sc-for>
+                </div>
+                <div style="flex:1;font-size:11.5px;color:#7E8A84;font-variant-numeric:tabular-nums">ใช้ไปแล้ว {{ t.totalText }}</div>
+              </div>
+            </div>
+          </sc-for>
+
+          <div onClick="{{ openCreate }}" style="margin-top:4px;border:1px dashed rgba(255,255,255,.22);border-radius:16px;padding:15px 16px;display:flex;align-items:center;gap:11px;cursor:pointer;background:rgba(255,255,255,.035)" style-hover="border-color:#5FC2A2">
+            <div style="width:32px;height:32px;border-radius:16px;background:rgba(31,111,92,.2);color:#5FC2A2;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:500">+</div>
+            <div>
+              <div style="font-size:14.5px;font-weight:600">สร้างทริปใหม่</div>
+              <div style="margin-top:2px;font-size:11.5px;color:#8E9A94">กำหนดวัน แล้วส่งลิงก์เชิญเพื่อน</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;padding:6px 8px 8px;background:#19221E;border-top:1px solid rgba(255,255,255,.1)">
+          <sc-for list="{{ tabBar }}" as="n" hint-placeholder-count="3">
+            <div onClick="{{ n.go }}" style="flex:1;padding:8px 0 4px;text-align:center;cursor:pointer">
+              <div style="font-size:15px;font-weight:600;color:{{ n.color }}">{{ n.glyph }}</div>
+              <div style="margin-top:2px;font-size:10.5px;font-weight:500;color:{{ n.color }}">{{ n.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCreate }}">
+        <div style="padding:12px 18px 12px;background:#19221E;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.09)">
+          <div onClick="{{ goTrips }}" style="font-size:13.5px;color:#97A29D;cursor:pointer;width:56px">ยกเลิก</div>
+          <div style="font-size:15px;font-weight:600">สร้างทริป</div>
+          <div onClick="{{ submitCreate }}" style="font-size:13.5px;font-weight:600;color:{{ crSaveColor }};cursor:pointer;width:56px;text-align:right">สร้าง</div>
+        </div>
+        <div style="flex:1;overflow:auto">
+          <div style="padding:18px 18px 6px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">ชื่อทริป</div>
+          <div style="padding:0 18px">
+            <input value="{{ crName }}" onChange="{{ setCrName }}" placeholder="เช่น ปาย ปีใหม่ 2569" style="width:100%;box-sizing:border-box;height:48px;border:1px solid rgba(255,255,255,.16);border-radius:13px;padding:0 14px;font-size:15px;background:#19221E;outline:none;color:#EAEFEC" />
+          </div>
+          <div style="padding:18px 18px 6px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">ช่วงวันเดินทาง</div>
+          <div style="padding:0 18px;display:flex;gap:10px">
+            <div style="flex:1">
+              <div style="font-size:11.5px;color:#97A29D;margin-bottom:5px">เริ่ม</div>
+              <input type="date" value="{{ crStart }}" onChange="{{ setCrStart }}" style="width:100%;box-sizing:border-box;height:46px;border:1px solid rgba(255,255,255,.16);border-radius:13px;padding:0 12px;font-size:14px;background:#19221E;outline:none;color:#EAEFEC" />
+            </div>
+            <div style="flex:1">
+              <div style="font-size:11.5px;color:#97A29D;margin-bottom:5px">สิ้นสุด</div>
+              <input type="date" value="{{ crEnd }}" onChange="{{ setCrEnd }}" style="width:100%;box-sizing:border-box;height:46px;border:1px solid rgba(255,255,255,.16);border-radius:13px;padding:0 12px;font-size:14px;background:#19221E;outline:none;color:#EAEFEC" />
+            </div>
+          </div>
+          <div style="padding:8px 18px 0;font-size:12px;color:{{ crRangeColor }}">{{ crRangeText }}</div>
+
+          <div style="padding:20px 18px 6px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">เชิญผู้ร่วมทริป</div>
+          <div style="padding:0 18px;display:flex;gap:8px">
+            <input value="{{ crEmail }}" onChange="{{ setCrEmail }}" placeholder="อีเมล Gmail ของเพื่อน" style="flex:1;box-sizing:border-box;height:46px;border:1px solid rgba(255,255,255,.16);border-radius:13px;padding:0 13px;font-size:14px;background:#19221E;outline:none;color:#EAEFEC" />
+            <div onClick="{{ addCrEmail }}" style="width:64px;height:46px;border-radius:13px;background:rgba(31,111,92,.2);color:#5FC2A2;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;cursor:pointer">เพิ่ม</div>
+          </div>
+          <div style="padding:10px 18px 0;display:flex;flex-wrap:wrap;gap:7px">
+            <sc-for list="{{ crInvites }}" as="i" hint-placeholder-count="2">
+              <div onClick="{{ i.remove }}" style="padding:7px 11px;border-radius:11px;background:#19221E;border:1px solid rgba(255,255,255,.14);font-size:12.5px;color:#EAEFEC;display:flex;align-items:center;gap:7px;cursor:pointer">{{ i.email }}<span style="color:#7E8A84">×</span></div>
+            </sc-for>
+          </div>
+
+          <div style="margin:20px 16px 0;background:#19221E;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:15px 16px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <svg width="58" height="58" viewBox="0 0 58 58" role="img" aria-label="ตำแหน่ง QR ลิงก์เชิญ" style="flex:none;border-radius:9px">
+                <defs><pattern id="qrInv" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#232E29"></rect><rect width="3.5" height="7" fill="#2E3A34"></rect></pattern></defs>
+                <rect width="58" height="58" fill="url(#qrInv)"></rect>
+              </svg>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600">ลิงก์เชิญเข้าทริป</div>
+                <div style="margin-top:3px;font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:#97A29D;word-break:break-all">{{ crLink }}</div>
+              </div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <div onClick="{{ copyCrLink }}" style="flex:1;height:40px;border-radius:20px;background:rgba(31,111,92,.2);color:#5FC2A2;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer">คัดลอกลิงก์</div>
+              <div onClick="{{ shareCrLink }}" style="flex:1;height:40px;border-radius:20px;background:#19221E;border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer">แชร์ไป LINE</div>
+            </div>
+            <div style="margin-top:10px;font-size:11.5px;line-height:1.55;color:#8E9A94">คนที่กดลิงก์จะถูกขอล็อกอินด้วย Gmail ก่อน แล้วชื่อจะขึ้นในหน้าสมาชิกทันที</div>
+          </div>
+          <div style="height:20px"></div>
+        </div>
+        <div style="padding:10px 16px 14px;background:#0F1512;border-top:1px solid rgba(255,255,255,.09)">
+          <div onClick="{{ submitCreate }}" style="height:50px;border-radius:25px;background:{{ crBtnBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">สร้างทริปและส่งคำเชิญ</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isMembers }}">
+        <div style="padding:12px 18px 14px;background:#19221E;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.09)">
+          <div onClick="{{ backToTrip }}" style="font-size:13.5px;color:#5FC2A2;font-weight:500;cursor:pointer">← {{ tripName }}</div>
+          <div style="font-size:15px;font-weight:600">ผู้ร่วมทริป</div>
+          <div style="width:44px"></div>
+        </div>
+        <div style="flex:1;overflow:auto">
+          <div style="padding:16px 18px 6px;display:flex;align-items:baseline;justify-content:space-between">
+            <div style="font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">เข้าร่วมแล้ว {{ joinedCount }} คน</div>
+            <div style="font-size:11.5px;color:#7E8A84">{{ tripDates }}</div>
+          </div>
+          <sc-for list="{{ memberRows }}" as="m" hint-placeholder-count="4">
+            <div style="display:flex;gap:12px;align-items:center;padding:13px 18px;background:#19221E;border-top:1px solid rgba(255,255,255,.08)">
+              <div style="width:38px;height:38px;flex:none;border-radius:19px;background:{{ m.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">{{ m.ini }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:7px">
+                  <div style="font-size:14.5px;font-weight:500">{{ m.name }}</div>
+                  <div style="padding:2px 7px;border-radius:6px;background:{{ m.roleBg }};color:{{ m.roleFg }};font-size:10px;font-weight:600">{{ m.role }}</div>
+                </div>
+                <div style="margin-top:2px;font:400 11.5px/1.4 'IBM Plex Mono',monospace;color:#97A29D;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.email }}</div>
+              </div>
+              <div style="text-align:right;flex:none">
+                <div style="font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ m.color }}">{{ m.netText }}</div>
+                <div style="margin-top:2px;font-size:10.5px;color:#8E9A94">{{ m.joined }}</div>
+              </div>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ hasPending }}">
+            <div style="padding:20px 18px 6px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">รอตอบรับ {{ pendingCount }} คน</div>
+            <sc-for list="{{ pendingRows }}" as="p" hint-placeholder-count="1">
+              <div style="display:flex;gap:12px;align-items:center;padding:13px 18px;background:#19221E;border-top:1px solid rgba(255,255,255,.08)">
+                <div style="width:38px;height:38px;flex:none;border-radius:19px;background:#232E29;color:#7E8A84;display:flex;align-items:center;justify-content:center;font-size:15px">?</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font:400 12.5px/1.4 'IBM Plex Mono',monospace;color:#EAEFEC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.email }}</div>
+                  <div style="margin-top:2px;font-size:11.5px;color:#8E9A94">ส่งคำเชิญแล้ว · ยังไม่กดลิงก์</div>
+                </div>
+                <div onClick="{{ p.accept }}" style="flex:none;padding:8px 12px;border-radius:10px;background:rgba(31,111,92,.2);color:#5FC2A2;font-size:12.5px;font-weight:600;cursor:pointer">จำลองเข้าร่วม</div>
+              </div>
+            </sc-for>
+          </sc-if>
+
+          <div style="margin:20px 16px 0;background:#19221E;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:15px 16px">
+            <div style="font-size:13px;font-weight:600">ลิงก์เชิญของทริปนี้</div>
+            <div style="margin-top:5px;font:400 11.5px/1.5 'IBM Plex Mono',monospace;color:#97A29D;word-break:break-all">{{ tripLink }}</div>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <div onClick="{{ copyTripLink }}" style="flex:1;height:40px;border-radius:20px;background:rgba(31,111,92,.2);color:#5FC2A2;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer">คัดลอก</div>
+              <div onClick="{{ inviteMore }}" style="flex:1;height:40px;border-radius:20px;background:#19221E;border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;cursor:pointer">เชิญด้วยอีเมล</div>
+            </div>
+          </div>
+          <div style="height:30px"></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTrip }}">
+        <div style="padding:14px 18px 0;background:#19221E;border-bottom:1px solid rgba(255,255,255,.09)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div onClick="{{ goTrips }}" style="font-size:13.5px;color:#5FC2A2;font-weight:500;cursor:pointer">← ทริป</div>
+            <div style="display:flex;gap:16px">
+              <div onClick="{{ openMembers }}" style="font-size:13.5px;color:#5FC2A2;font-weight:500;cursor:pointer">สมาชิก</div>
+              <div onClick="{{ toggleMenu }}" style="font-size:15px;color:#5FC2A2;font-weight:600;cursor:pointer;line-height:1">···</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;margin-top:10px">
+            <h2 style="margin:0;font-size:23px;font-weight:600;letter-spacing:-.01em">{{ tripName }}</h2>
+            <sc-if value="{{ isClosed }}">
+              <div style="padding:3px 8px;border-radius:7px;background:#232E29;color:#97A29D;font-size:10.5px;font-weight:600;white-space:nowrap">ปิดแล้ว</div>
+            </sc-if>
+          </div>
+          <div style="margin-top:4px;font-size:12.5px;color:#97A29D">{{ tripDates }} · {{ joinedCount }} คน · ใช้ไป {{ totalText }}</div>
+
+          <div style="margin-top:16px;display:flex;align-items:flex-end;justify-content:space-between">
+            <div>
+              <div style="font-size:11.5px;color:#8E9A94">{{ myNetLabel }}</div>
+              <div style="margin-top:2px;font-size:32px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:{{ myNetColor }}">{{ myNetAbs }}</div>
+            </div>
+            <div style="display:flex">
+              <sc-for list="{{ tripAvatars }}" as="a" hint-placeholder-count="4">
+                <div style="width:32px;height:32px;border-radius:16px;background:{{ a.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;border:2px solid #19221E;margin-left:-8px">{{ a.ini }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;display:flex;gap:20px">
+            <div onClick="{{ showList }}" style="flex:none;white-space:nowrap;padding-bottom:10px;font-size:14px;font-weight:600;color:{{ tabListColor }};border-bottom:2px solid {{ tabListBorder }};cursor:pointer">รายการ · {{ expenseCount }}</div>
+            <div onClick="{{ showSummary }}" style="flex:none;white-space:nowrap;padding-bottom:10px;font-size:14px;font-weight:600;color:{{ tabSumColor }};border-bottom:2px solid {{ tabSumBorder }};cursor:pointer">สรุปยอด</div>
+          </div>
+        </div>
+
+        <div style="flex:1;overflow:auto">
+          <sc-if value="{{ isList }}">
+            <sc-if value="{{ isClosed }}">
+              <div style="margin:14px 16px 0;padding:13px 15px;background:#232E29;border-radius:14px;font-size:12.5px;line-height:1.55;color:#9AA6A0">ทริปนี้ปิดแล้ว — บันทึกค่าใช้จ่ายเพิ่มไม่ได้ ดูได้เฉพาะรายการและสรุป (เจ้าของทริปเปิดใหม่ได้จากเมนู ···)</div>
+            </sc-if>
+            <sc-if value="{{ isEmpty }}">
+              <div style="padding:52px 30px;text-align:center">
+                <div style="font-size:15.5px;font-weight:600">ยังไม่มีค่าใช้จ่าย</div>
+                <div style="margin-top:6px;font-size:13px;line-height:1.6;color:#97A29D">กด “เพิ่มรายการ” เพื่อบันทึกว่าใครจ่ายอะไรไป แล้วยอดจะสรุปให้อัตโนมัติ</div>
+              </div>
+            </sc-if>
+            <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+              <div style="padding:16px 18px 7px;display:flex;justify-content:space-between;align-items:baseline">
+                <div style="font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">{{ g.label }}</div>
+                <div style="font-size:11.5px;color:#7E8A84;font-variant-numeric:tabular-nums">{{ g.sumText }}</div>
+              </div>
+              <sc-for list="{{ g.items }}" as="e" hint-placeholder-count="3">
+                <div style="display:flex;gap:12px;align-items:center;padding:13px 18px;background:#19221E;border-top:1px solid rgba(255,255,255,.08)">
+                  <div style="width:34px;height:34px;flex:none;border-radius:11px;background:rgba(31,111,92,.2);color:#5FC2A2;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600">{{ e.letter }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14.5px;font-weight:500;letter-spacing:-.005em">{{ e.title }}</div>
+                    <div style="margin-top:2px;font-size:11.5px;color:#97A29D">{{ e.sub }}</div>
+                  </div>
+                  <div style="text-align:right;flex:none">
+                    <div style="font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums">{{ e.amountText }}</div>
+                    <div style="margin-top:2px;font-size:11.5px;font-weight:500;font-variant-numeric:tabular-nums;color:{{ e.deltaColor }}">{{ e.deltaText }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </sc-for>
+            <div style="height:24px"></div>
+          </sc-if>
+
+          <sc-if value="{{ isSummary }}">
+            <div style="padding:16px 18px 10px;display:flex;align-items:center;gap:7px">
+              <div style="width:7px;height:7px;border-radius:4px;background:#1F6F5C;animation:livePulse 1.8s ease-in-out infinite"></div>
+              <div style="font-size:11.5px;color:#97A29D">อัปเดตสด · {{ lastUpdate }}</div>
+            </div>
+            <div style="margin:0 16px;display:flex;gap:10px">
+              <div style="flex:1;background:#19221E;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:13px 14px">
+                <div style="font-size:11px;color:#8E9A94">ใช้ไปทั้งทริป</div>
+                <div style="margin-top:4px;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums">{{ totalText }}</div>
+              </div>
+              <div style="flex:1;background:#19221E;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:13px 14px">
+                <div style="font-size:11px;color:#8E9A94">เฉลี่ยคนละ</div>
+                <div style="margin-top:4px;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums">{{ avgText }}</div>
+              </div>
+            </div>
+
+            <div style="padding:20px 18px 8px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">จ่ายไปแล้ว vs ส่วนแบ่ง</div>
+            <sc-for list="{{ balanceRows }}" as="b" hint-placeholder-count="4">
+              <div style="padding:13px 18px;background:#19221E;border-top:1px solid rgba(255,255,255,.08)">
+                <div style="display:flex;gap:12px;align-items:center">
+                  <div style="width:34px;height:34px;flex:none;border-radius:17px;background:{{ b.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">{{ b.ini }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14.5px;font-weight:500">{{ b.name }}</div>
+                    <div style="margin-top:2px;font-size:11.5px;color:#97A29D;font-variant-numeric:tabular-nums">จ่ายไป {{ b.paidText }} · ต้องจ่าย {{ b.shareText }}</div>
+                  </div>
+                  <div style="text-align:right;flex:none">
+                    <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ b.color }}">{{ b.netText }}</div>
+                    <div style="margin-top:2px;font-size:10.5px;color:#8E9A94">{{ b.label }}</div>
+                  </div>
+                </div>
+                <div style="margin-top:9px;height:6px;border-radius:3px;background:#232E29;overflow:hidden;display:flex">
+                  <div style="height:100%;background:{{ b.barColor }};width:{{ b.barWidth }}"></div>
+                </div>
+              </div>
+            </sc-for>
+
+            <div style="padding:20px 18px 8px;display:flex;align-items:baseline;justify-content:space-between">
+              <div style="font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">ใครโอนให้ใคร</div>
+              <div style="font-size:11.5px;color:#7E8A84">เหลือ {{ transferCount }} ครั้ง</div>
+            </div>
+            <sc-for list="{{ transfers }}" as="t" hint-placeholder-count="3">
+              <div style="display:flex;gap:10px;align-items:center;padding:13px 18px;background:#19221E;border-top:1px solid rgba(255,255,255,.08)">
+                <div style="width:30px;height:30px;flex:none;border-radius:15px;background:{{ t.fromBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">{{ t.fromIni }}</div>
+                <div style="color:#4E5A54">→</div>
+                <div style="width:30px;height:30px;flex:none;border-radius:15px;background:{{ t.toBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">{{ t.toIni }}</div>
+                <div style="flex:1;min-width:0;font-size:13.5px">{{ t.fromName }} โอนให้ {{ t.toName }}</div>
+                <div style="font-size:14.5px;font-weight:600;font-variant-numeric:tabular-nums;flex:none">{{ t.amountText }}</div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ allSettled }}">
+              <div style="margin:14px 16px;padding:26px 20px;text-align:center;background:rgba(31,111,92,.2);border-radius:16px">
+                <div style="font-size:16px;font-weight:600;color:#5FC2A2">ไม่มียอดค้าง</div>
+                <div style="margin-top:5px;font-size:12.5px;color:#9AA6A0">ทุกคนเคลียร์ครบแล้ว</div>
+              </div>
+            </sc-if>
+            <div style="padding:14px 16px 6px">
+              <div onClick="{{ openSettle }}" style="height:48px;border-radius:24px;background:#1F6F5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;cursor:pointer">ไปหน้าเคลียร์หนี้</div>
+              <sc-if value="{{ canSimulate }}">
+                <div onClick="{{ simulate }}" style="margin-top:8px;height:44px;border-radius:24px;border:1px dashed rgba(255,255,255,.22);color:#9AA6A0;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer">จำลองเพื่อนบันทึกรายการ (ดูยอดขยับสด)</div>
+              </sc-if>
+            </div>
+            <div style="height:24px"></div>
+          </sc-if>
+        </div>
+
+        <div style="display:flex;gap:10px;padding:10px 16px 14px;background:#0F1512;border-top:1px solid rgba(255,255,255,.09)">
+          <div onClick="{{ openAdd }}" style="flex:1;height:50px;border-radius:25px;background:{{ addBtnBg }};color:{{ addBtnFg }};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">{{ addBtnLabel }}</div>
+          <div onClick="{{ openSettle }}" style="flex:none;width:120px;height:50px;border-radius:25px;background:#19221E;border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">เคลียร์หนี้</div>
+        </div>
+
+        <sc-if value="{{ menuOpen }}">
+          <div style="position:absolute;inset:0;background:rgba(0,0,0,.62);z-index:80" onClick="{{ toggleMenu }}"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;z-index:81;background:#19221E;border-radius:28px 28px 0 0;padding:18px 20px 22px">
+            <div style="width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:0 auto 16px"></div>
+            <div style="font-size:16px;font-weight:600;text-align:center">จัดการทริป</div>
+            <div onClick="{{ openMembers }}" style="margin-top:14px;height:50px;border-radius:14px;background:#0F1512;display:flex;align-items:center;padding:0 16px;font-size:14.5px;font-weight:500;cursor:pointer">ผู้ร่วมทริปและคำเชิญ</div>
+            <div onClick="{{ toggleClose }}" style="margin-top:8px;height:50px;border-radius:14px;background:{{ closeBtnBg }};color:{{ closeBtnFg }};display:flex;align-items:center;padding:0 16px;font-size:14.5px;font-weight:600;cursor:pointer">{{ closeBtnLabel }}</div>
+            <div style="margin-top:8px;padding:0 4px;font-size:11.5px;line-height:1.55;color:#8E9A94">{{ closeHint }}</div>
+            <div onClick="{{ toggleMenu }}" style="margin-top:10px;height:46px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#97A29D;cursor:pointer">ปิด</div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ isAdd }}">
+        <div style="padding:12px 18px 12px;background:#19221E;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.09)">
+          <div onClick="{{ cancelAdd }}" style="font-size:13.5px;color:#97A29D;cursor:pointer;width:56px">ยกเลิก</div>
+          <div style="font-size:15px;font-weight:600">บันทึกค่าใช้จ่าย</div>
+          <div onClick="{{ saveDraft }}" style="font-size:13.5px;font-weight:600;color:{{ saveColor }};cursor:pointer;width:56px;text-align:right">บันทึก</div>
+        </div>
+        <div style="flex:1;overflow:auto;background:#19221E">
+          <div style="padding:22px 18px 18px;text-align:center;border-bottom:1px solid rgba(255,255,255,.08)">
+            <div style="font-size:11.5px;color:#8E9A94">จำนวนเงิน (บาท)</div>
+            <div style="margin-top:4px;font-size:42px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.025em;color:{{ draftAmountColor }}">{{ draftAmountText }}</div>
+          </div>
+          <div style="padding:14px 18px 4px">
+            <input value="{{ draftTitle }}" onChange="{{ setTitle }}" placeholder="จ่ายค่าอะไร เช่น หมูกระทะริมปิง" style="width:100%;box-sizing:border-box;height:46px;border:1px solid rgba(255,255,255,.16);border-radius:13px;padding:0 14px;font-size:14.5px;color:#EAEFEC;background:#131A17;outline:none" />
+          </div>
+          <div style="padding:12px 18px 2px;display:flex;gap:7px;flex-wrap:wrap">
+            <sc-for list="{{ cats }}" as="c" hint-placeholder-count="5">
+              <div onClick="{{ c.pick }}" style="padding:8px 13px;border-radius:11px;font-size:13px;font-weight:500;cursor:pointer;background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.border }}">{{ c.name }}</div>
+            </sc-for>
+          </div>
+          <div style="padding:18px 18px 6px;font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">ใครเป็นคนจ่าย</div>
+          <div style="padding:0 18px;display:flex;gap:8px">
+            <sc-for list="{{ payerChoices }}" as="p" hint-placeholder-count="4">
+              <div onClick="{{ p.pick }}" style="flex:1;padding:10px 4px;border-radius:13px;text-align:center;cursor:pointer;background:{{ p.bg }};border:1px solid {{ p.border }}">
+                <div style="width:30px;height:30px;margin:0 auto;border-radius:15px;background:{{ p.avatarBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600">{{ p.ini }}</div>
+                <div style="margin-top:6px;font-size:11.5px;font-weight:500;color:{{ p.fg }}">{{ p.short }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:18px 18px 6px;display:flex;align-items:center;justify-content:space-between">
+            <div style="font:500 11px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#8E9A94;text-transform:uppercase">หารกันยังไง</div>
+            <div style="font-size:11.5px;color:{{ remainColor }};font-variant-numeric:tabular-nums">{{ remainText }}</div>
+          </div>
+          <div style="margin:0 18px;padding:3px;display:flex;gap:3px;background:#232E29;border-radius:12px">
+            <div onClick="{{ setEqual }}" style="flex:1;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;background:{{ eqBg }};color:{{ eqFg }};box-shadow:{{ eqShadow }}">หารเท่ากัน</div>
+            <div onClick="{{ setExact }}" style="flex:1;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;background:{{ exBg }};color:{{ exFg }};box-shadow:{{ exShadow }}">ระบุจำนวน</div>
+          </div>
+          <div style="margin-top:10px">
+            <sc-for list="{{ splitRows }}" as="r" hint-placeholder-count="4">
+              <div style="display:flex;gap:11px;align-items:center;padding:11px 18px;border-top:1px solid rgba(255,255,255,.08)">
+                <div onClick="{{ r.toggle }}" style="width:22px;height:22px;flex:none;border-radius:7px;cursor:pointer;background:{{ r.boxBg }};border:1.5px solid {{ r.boxBorder }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">{{ r.check }}</div>
+                <div onClick="{{ r.toggle }}" style="width:30px;height:30px;flex:none;border-radius:15px;background:{{ r.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;opacity:{{ r.opacity }}">{{ r.ini }}</div>
+                <div onClick="{{ r.toggle }}" style="flex:1;font-size:14px;font-weight:500;cursor:pointer;color:{{ r.nameColor }}">{{ r.name }}</div>
+                <sc-if value="{{ isExact }}">
+                  <input value="{{ r.exactValue }}" onChange="{{ r.setExact }}" placeholder="0" style="width:84px;height:36px;box-sizing:border-box;text-align:right;border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:0 10px;font-size:14px;font-variant-numeric:tabular-nums;background:#131A17;outline:none;color:#EAEFEC" />
+                </sc-if>
+                <sc-if value="{{ isEqualSplit }}">
+                  <div style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ r.amountColor }}">{{ r.amountText }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="height:14px"></div>
+        </div>
+        <div style="background:#232E29;padding:8px 6px 14px;border-top:1px solid rgba(255,255,255,.1)">
+          <sc-for list="{{ keypad }}" as="row" hint-placeholder-count="4">
+            <div style="display:flex;gap:6px;padding:3px 6px">
+              <sc-for list="{{ row.keys }}" as="k" hint-placeholder-count="3">
+                <div onClick="{{ k.press }}" style="flex:1;height:44px;border-radius:11px;background:{{ k.bg }};color:#EAEFEC;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,.45)">{{ k.label }}</div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSettle }}">
+        <div style="padding:12px 18px 14px;background:#19221E;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.09)">
+          <div onClick="{{ backToTrip }}" style="font-size:13.5px;color:#5FC2A2;font-weight:500;cursor:pointer">← กลับ</div>
+          <div style="font-size:15px;font-weight:600">เคลียร์หนี้</div>
+          <div style="width:44px"></div>
+        </div>
+        <div style="flex:1;overflow:auto">
+          <div style="padding:20px 18px 4px">
+            <div style="font-size:14px;line-height:1.6;color:#9AA6A0">ยุบหนี้ไขว้แล้วเหลือโอน <span style="color:#EAEFEC;font-weight:600">{{ transferCount }} ครั้ง</span> จากเดิมที่ต้องโอนกันไปมา {{ naiveCount }} ครั้ง</div>
+          </div>
+          <sc-for list="{{ transfers }}" as="t" hint-placeholder-count="3">
+            <div style="margin:12px 16px 0;background:#19221E;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:15px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:34px;height:34px;flex:none;border-radius:17px;background:{{ t.fromBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">{{ t.fromIni }}</div>
+                <div style="color:#4E5A54;font-size:15px">→</div>
+                <div style="width:34px;height:34px;flex:none;border-radius:17px;background:{{ t.toBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600">{{ t.toIni }}</div>
+                <div style="flex:1;min-width:0;margin-left:2px">
+                  <div style="font-size:14px;font-weight:500">{{ t.fromName }} โอนให้ {{ t.toName }}</div>
+                  <div style="margin-top:2px;font-size:11.5px;color:#8E9A94">{{ t.note }}</div>
+                </div>
+                <div style="font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;flex:none">{{ t.amountText }}</div>
+              </div>
+              <div onClick="{{ t.act }}" style="margin-top:13px;height:42px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;cursor:pointer;background:{{ t.btnBg }};color:{{ t.btnFg }};border:1px solid {{ t.btnBorder }}">{{ t.btnLabel }}</div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ allSettled }}">
+            <div style="margin:20px 16px;padding:28px 20px;text-align:center;background:rgba(31,111,92,.2);border-radius:18px">
+              <div style="font-size:17px;font-weight:600;color:#5FC2A2">เคลียร์ครบทุกคนแล้ว</div>
+              <div style="margin-top:6px;font-size:13px;color:#9AA6A0;line-height:1.6">ไม่มียอดค้างในทริปนี้ · ปิดทริปได้เลย</div>
+            </div>
+          </sc-if>
+          <div style="height:30px"></div>
+        </div>
+        <div style="padding:10px 16px 14px;background:#0F1512;border-top:1px solid rgba(255,255,255,.09)">
+          <div onClick="{{ backToTrip }}" style="height:50px;border-radius:25px;background:#19221E;border:1px solid rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">เสร็จสิ้น</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isHistory }}">
+        <div style="padding:22px 20px 10px">
+          <h2 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.01em">ประวัติทริป</h2>
+          <div style="margin-top:4px;font-size:12.5px;color:#97A29D">ทริปที่ปิดแล้ว {{ closedCount }} ทริป · รวมใช้ไป {{ lifetimeText }}</div>
+        </div>
+        <div style="flex:1;overflow:auto;padding:8px 16px 24px">
+          <sc-for list="{{ closedTrips }}" as="t" hint-placeholder-count="1">
+            <div onClick="{{ t.open }}" style="background:#19221E;border-radius:16px;padding:15px 16px;margin-bottom:10px;border:1px solid rgba(255,255,255,.09);cursor:pointer" style-hover="border-color:rgba(31,111,92,.45)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:15.5px;font-weight:600">{{ t.name }}</div>
+                  <div style="margin-top:3px;font-size:12px;color:#97A29D">{{ t.dates }} · {{ t.memberCount }} คน · {{ t.count }} รายการ</div>
+                </div>
+                <div style="text-align:right;flex:none">
+                  <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums">{{ t.totalText }}</div>
+                  <div style="margin-top:3px;font-size:11px;color:#8E9A94">คนละ {{ t.avgText }}</div>
+                </div>
+              </div>
+              <div style="margin-top:11px;padding-top:11px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between">
+                <div style="font-size:11.5px;color:#5FC2A2;font-weight:600">เคลียร์ครบแล้ว</div>
+                <div style="font-size:11.5px;color:#7E8A84">ดูสรุปทั้งหมด ›</div>
+              </div>
+            </div>
+          </sc-for>
+          <div style="margin-top:6px;padding:16px;background:rgba(255,255,255,.035);border:1px dashed rgba(255,255,255,.2);border-radius:16px;font-size:12.5px;line-height:1.6;color:#97A29D">ทริปที่ยังเปิดอยู่จะย้ายมาที่นี่อัตโนมัติเมื่อกด “ปิดทริป”</div>
+        </div>
+        <div style="display:flex;padding:6px 8px 8px;background:#19221E;border-top:1px solid rgba(255,255,255,.1)">
+          <sc-for list="{{ tabBar }}" as="n" hint-placeholder-count="3">
+            <div onClick="{{ n.go }}" style="flex:1;padding:8px 0 4px;text-align:center;cursor:pointer">
+              <div style="font-size:15px;font-weight:600;color:{{ n.color }}">{{ n.glyph }}</div>
+              <div style="margin-top:2px;font-size:10.5px;font-weight:500;color:{{ n.color }}">{{ n.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPay }}">
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,.62);z-index:80" onClick="{{ closePay }}"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;z-index:81;background:#19221E;border-radius:28px 28px 0 0;padding:18px 20px 22px">
+          <div style="width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:0 auto 16px"></div>
+          <div style="font-size:18px;font-weight:600;text-align:center">โอนให้ {{ payToName }}</div>
+          <div style="margin-top:4px;font-size:13px;color:#97A29D;text-align:center">PromptPay · {{ payToPhone }}</div>
+          <div style="margin:16px auto 0;width:168px;height:168px;border-radius:16px;overflow:hidden;background:#232E29;display:flex;align-items:center;justify-content:center">
+            <svg width="168" height="168" viewBox="0 0 168 168" role="img" aria-label="ตำแหน่ง QR PromptPay">
+              <defs><pattern id="stripeQR" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#232E29"></rect><rect width="4" height="8" fill="#2E3A34"></rect></pattern></defs>
+              <rect width="168" height="168" fill="url(#stripeQR)"></rect>
+              <text x="84" y="88" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="#8C948F">PromptPay QR</text>
+            </svg>
+          </div>
+          <div style="margin-top:14px;text-align:center;font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em">{{ payAmountText }}</div>
+          <div onClick="{{ confirmPay }}" style="margin-top:14px;height:50px;border-radius:25px;background:#1F6F5C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#175647">ยืนยันว่าโอนแล้ว</div>
+          <div onClick="{{ closePay }}" style="margin-top:6px;height:42px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#97A29D;cursor:pointer">ปิด</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ hasToast }}">
+        <div style="position:absolute;left:16px;right:16px;bottom:84px;z-index:90;background:#232E29;color:#fff;border-radius:14px;padding:13px 16px;font-size:13.5px;line-height:1.5;text-align:center;box-shadow:0 14px 30px rgba(0,0,0,.5)">{{ toast }}</div>
+      </sc-if>
+
+    </div>
+
+  </x-import>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:860,&quot;height&quot;:1010},&quot;showDecimals&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;การแสดงตัวเลข&quot;},&quot;startSignedIn&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;เดโม&quot;}}">
+const GREEN = '#5FC2A2', RED = '#E58A6E', INK = '#EAEFEC', MUTED = '#8E9A94';
+
+const PEOPLE = {
+  me: { id: 'me', name: 'ฟ้า (คุณ)', short: 'ฟ้า', ini: 'ฟ', bg: '#1F6F5C', email: 'faa.kmt@gmail.com', phone: '' },
+  boss: { id: 'boss', name: 'บอส', short: 'บอส', ini: 'บ', bg: '#3E5C8A', email: 'boss.wtn@gmail.com', phone: '08x-xxx-4471' },
+  mint: { id: 'mint', name: 'มิ้นท์', short: 'มิ้นท์', ini: 'ม', bg: '#8A5A3E', email: 'mint.ppn@gmail.com', phone: '09x-xxx-2210' },
+  ta: { id: 'ta', name: 'ต้า', short: 'ต้า', ini: 'ต', bg: '#5E6B3C', email: 'ta.chai@gmail.com', phone: '06x-xxx-8853' },
+  jj: { id: 'jj', name: 'เจเจ', short: 'เจเจ', ini: 'จ', bg: '#6B4A6B', email: 'jj.nun@gmail.com', phone: '08x-xxx-1902' },
+};
+
+const CATS = [
+  { id: 'stay', name: 'ที่พัก', letter: 'พ' },
+  { id: 'food', name: 'อาหาร', letter: 'อ' },
+  { id: 'move', name: 'เดินทาง', letter: 'ท' },
+  { id: 'fun', name: 'เที่ยว', letter: 'ก' },
+  { id: 'etc', name: 'อื่นๆ', letter: '•' },
+];
+
+const ALL4 = ['me', 'boss', 'mint', 'ta'];
+const ALL5 = ['me', 'boss', 'mint', 'ta', 'jj'];
+
+const TRIPS = [
+  { id: 'cnx', name: 'เชียงใหม่ 3 วัน 2 คืน', dates: '10–12 ต.ค. 2568', status: 'open', owner: 'me', code: 'CNX-8F2K', members: ALL4, joins: { me: 'เจ้าของ', boss: 'เข้าร่วม 8 ต.ค.', mint: 'เข้าร่วม 8 ต.ค.', ta: 'เข้าร่วม 9 ต.ค.' }, invites: [{ email: 'nam.sri@gmail.com' }] },
+  { id: 'pai', name: 'ปาย ปีใหม่', dates: '29 ธ.ค. – 1 ม.ค.', status: 'open', owner: 'me', code: 'PAI-3QW9', members: ['me', 'boss'], joins: { me: 'เจ้าของ', boss: 'เข้าร่วมวันนี้' }, invites: [{ email: 'mint.ppn@gmail.com' }, { email: 'jj.nun@gmail.com' }] },
+  { id: 'lipe', name: 'เกาะหลีเป๊ะ', dates: '3–6 เม.ย. 2568', status: 'closed', owner: 'boss', code: 'LIP-1XZ7', members: ALL5, joins: { me: 'เข้าร่วม 1 เม.ย.', boss: 'เจ้าของ', mint: 'เข้าร่วม 1 เม.ย.', ta: 'เข้าร่วม 2 เม.ย.', jj: 'เข้าร่วม 2 เม.ย.' }, invites: [] },
+];
+
+const EXPENSES = {
+  cnx: [
+    { id: 'e1', title: 'ที่พัก Nimman Loft 2 คืน', cat: 'stay', amount: 4800, payer: 'mint', involved: ALL4, day: 'วันที่ 1 · 10 ต.ค.' },
+    { id: 'e2', title: 'เช่ารถ + น้ำมัน', cat: 'move', amount: 2150, payer: 'boss', involved: ALL4, day: 'วันที่ 1 · 10 ต.ค.' },
+    { id: 'e3', title: 'หมูกระทะ ริมปิง', cat: 'food', amount: 1280, payer: 'me', involved: ALL4, day: 'วันที่ 1 · 10 ต.ค.' },
+    { id: 'e4', title: 'ตั๋วดอยอินทนนท์', cat: 'fun', amount: 900, payer: 'ta', involved: ALL4, day: 'วันที่ 2 · 11 ต.ค.' },
+    { id: 'e5', title: 'คาเฟ่ + ของฝาก', cat: 'etc', amount: 640, payer: 'me', involved: ['me', 'mint'], day: 'วันที่ 2 · 11 ต.ค.' },
+    { id: 'e6', title: 'ซุปเปอร์ + เบียร์', cat: 'food', amount: 1100, payer: 'boss', involved: ALL4, day: 'วันที่ 2 · 11 ต.ค.' },
+    { id: 'e7', title: 'แท็กซี่ไปสนามบิน', cat: 'move', amount: 480, payer: 'ta', involved: ALL4, day: 'วันที่ 3 · 12 ต.ค.' },
+  ],
+  pai: [],
+  lipe: [
+    { id: 'l1', title: 'บ้านพักริมหาด 3 คืน', cat: 'stay', amount: 7500, payer: 'me', involved: ALL5, day: 'วันที่ 1 · 3 เม.ย.' },
+    { id: 'l2', title: 'สปีดโบ๊ทไป–กลับ', cat: 'move', amount: 4250, payer: 'jj', involved: ALL5, day: 'วันที่ 1 · 3 เม.ย.' },
+    { id: 'l3', title: 'ซีฟู้ดมื้อเย็น', cat: 'food', amount: 3200, payer: 'boss', involved: ALL5, day: 'วันที่ 2 · 4 เม.ย.' },
+    { id: 'l4', title: 'ทริปดำน้ำ 4 เกาะ', cat: 'fun', amount: 2500, payer: 'mint', involved: ALL5, day: 'วันที่ 3 · 5 เม.ย.' },
+  ],
+};
+
+const SETTLED = {
+  cnx: [], pai: [],
+  lipe: [
+    { from: 'ta', to: 'me', amount: 3490 }, { from: 'mint', to: 'me', amount: 520 },
+    { from: 'mint', to: 'jj', amount: 470 }, { from: 'boss', to: 'jj', amount: 290 },
+  ],
+};
+
+const SIM = [
+  { title: 'ร้านของฝากวัวลาย', cat: 'etc', amount: 860, payer: 'mint' },
+  { title: 'ค่าจอดรถ + ทางด่วน', cat: 'move', amount: 320, payer: 'boss' },
+  { title: 'ข้าวซอยเจ๊โอ', cat: 'food', amount: 540, payer: 'ta' },
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: 'auth', tab: 'list', active: 'cnx',
+    trips: TRIPS, expenses: EXPENSES, settled: SETTLED,
+    draft: null, create: null, payTo: null, toast: null, menuOpen: false,
+    simIndex: 0, lastUpdate: 'เมื่อสักครู่',
+  };
+
+  componentDidMount() { if (this.props.startSignedIn && this.state.screen === 'auth') this.setState({ screen: 'trips' }); }
+  P(id) { return PEOPLE[id] || PEOPLE.me; }
+  trip(id) { return this.state.trips.find(t => t.id === id) || this.state.trips[0]; }
+  dec() { return this.props.showDecimals ?? true; }
+  fmt(n) {
+    const d = this.dec() && Math.abs(n % 1) > 0.001 ? 2 : 0;
+    return '฿' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  signed(n) { return (n > 0.005 ? '+' : n < -0.005 ? '−' : '') + this.fmt(n); }
+
+  shares(e) {
+    const out = {};
+    if (e.exact) { e.involved.forEach(id => { out[id] = Number(e.exact[id] || 0); }); return out; }
+    const per = e.amount / Math.max(1, e.involved.length);
+    e.involved.forEach(id => { out[id] = per; });
+    return out;
+  }
+
+  ledger(tripId) {
+    const t = this.trip(tripId);
+    const list = this.state.expenses[tripId] || [];
+    const paid = {}, owe = {}, net = {};
+    t.members.forEach(id => { paid[id] = 0; owe[id] = 0; });
+    list.forEach(e => {
+      paid[e.payer] = (paid[e.payer] || 0) + e.amount;
+      const s = this.shares(e);
+      Object.keys(s).forEach(id => { owe[id] = (owe[id] || 0) + s[id]; });
+    });
+    t.members.forEach(id => { net[id] = (paid[id] || 0) - (owe[id] || 0); });
+    (this.state.settled[tripId] || []).forEach(s => { net[s.from] += s.amount; net[s.to] -= s.amount; });
+    return { paid, owe, net, total: list.reduce((a, e) => a + e.amount, 0), count: list.length, members: t.members };
+  }
+
+  plan(tripId) {
+    const L = this.ledger(tripId);
+    const debt = L.members.filter(id => L.net[id] < -0.01).map(id => ({ id, v: -L.net[id] })).sort((a, b) => b.v - a.v);
+    const cred = L.members.filter(id => L.net[id] > 0.01).map(id => ({ id, v: L.net[id] })).sort((a, b) => b.v - a.v);
+    const out = [];
+    let i = 0, j = 0;
+    while (i < debt.length && j < cred.length) {
+      const amt = Math.min(debt[i].v, cred[j].v);
+      if (amt > 0.01) out.push({ from: debt[i].id, to: cred[j].id, amount: amt });
+      debt[i].v -= amt; cred[j].v -= amt;
+      if (debt[i].v < 0.01) i++;
+      if (cred[j].v < 0.01) j++;
+    }
+    return out;
+  }
+
+  say(msg) {
+    this.setState({ toast: msg });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: null }), 2400);
+  }
+
+  newDraft(tripId) {
+    const t = this.trip(tripId);
+    return { amount: '', title: '', cat: 'food', payer: 'me', involved: t.members.slice(), type: 'equal', exact: {} };
+  }
+  patch(p) { this.setState(s => ({ draft: Object.assign({}, s.draft, p) })); }
+  patchCreate(p) { this.setState(s => ({ create: Object.assign({}, s.create, p) })); }
+
+  press(k) {
+    const d = this.state.draft; if (!d) return;
+    let a = d.amount;
+    if (k === 'del') a = a.slice(0, -1);
+    else if (k === '.') { if (!a.includes('.')) a = (a || '0') + '.'; }
+    else { if (a.includes('.') && a.split('.')[1].length >= 2) return; if (a.replace('.', '').length >= 8) return; a = a === '0' ? k : a + k; }
+    this.patch({ amount: a });
+  }
+
+  saveDraft() {
+    const s = this.state, d = s.draft, tripId = s.active;
+    if (this.trip(tripId).status === 'closed') { this.say('ทริปนี้ปิดแล้ว บันทึกเพิ่มไม่ได้'); return; }
+    const amt = Number(d.amount) || 0;
+    if (amt <= 0) { this.say('ใส่จำนวนเงินก่อนนะ'); return; }
+    if (!d.involved.length) { this.say('เลือกคนที่ร่วมหารอย่างน้อย 1 คน'); return; }
+    const e = {
+      id: 'x' + Date.now(), title: d.title.trim() || (CATS.find(c => c.id === d.cat) || {}).name,
+      cat: d.cat, amount: amt, payer: d.payer, involved: d.involved.slice(), day: 'บันทึกล่าสุด',
+    };
+    if (d.type === 'exact') {
+      const sum = d.involved.reduce((t, id) => t + (Number(d.exact[id]) || 0), 0);
+      if (Math.abs(sum - amt) > 0.01) { this.say('ยอดที่ระบุรวมกันยังไม่เท่ากับ ' + this.fmt(amt)); return; }
+      e.exact = Object.assign({}, d.exact);
+    }
+    this.setState(st => ({
+      expenses: Object.assign({}, st.expenses, { [tripId]: (st.expenses[tripId] || []).concat([e]) }),
+      screen: 'trip', tab: 'list', draft: null, lastUpdate: 'เมื่อสักครู่',
+    }));
+    this.say('บันทึกแล้ว · ' + e.title + ' ' + this.fmt(amt));
+  }
+
+  simulate() {
+    const s = this.state, tripId = s.active, t = this.trip(tripId);
+    const src = SIM[s.simIndex % SIM.length];
+    const payer = t.members.includes(src.payer) ? src.payer : t.members[1] || t.members[0];
+    const e = { id: 'sim' + Date.now(), title: src.title, cat: src.cat, amount: src.amount, payer, involved: t.members.slice(), day: 'บันทึกล่าสุด' };
+    this.setState(st => ({
+      expenses: Object.assign({}, st.expenses, { [tripId]: (st.expenses[tripId] || []).concat([e]) }),
+      simIndex: st.simIndex + 1, lastUpdate: 'อัปเดตเมื่อ 1 วินาทีที่แล้ว',
+    }));
+    this.say(this.P(payer).short + ' เพิ่ม “' + src.title + '” ' + this.fmt(src.amount) + ' · ยอดอัปเดตแล้ว');
+  }
+
+  setTripStatus(tripId, status) {
+    this.setState(st => ({ trips: st.trips.map(t => t.id === tripId ? Object.assign({}, t, { status }) : t), menuOpen: false }));
+    this.say(status === 'closed' ? 'ปิดทริปแล้ว · บันทึกค่าใช้จ่ายเพิ่มไม่ได้' : 'เปิดทริปอีกครั้ง · บันทึกได้แล้ว');
+  }
+
+  renderVals() {
+    const s = this.state;
+    const t = this.trip(s.active);
+    const L = this.ledger(s.active);
+    const transfers = this.plan(s.active);
+    const myNet = L.net.me || 0;
+    const list = s.expenses[s.active] || [];
+
+    const groups = [];
+    list.forEach(e => {
+      let g = groups.find(x => x.label === e.day);
+      if (!g) { g = { label: e.day, items: [], sum: 0 }; groups.push(g); }
+      const sh = this.shares(e);
+      const mine = sh.me || 0;
+      const delta = (e.payer === 'me' ? e.amount : 0) - mine;
+      g.sum += e.amount;
+      g.items.push({
+        title: e.title, letter: (CATS.find(c => c.id === e.cat) || CATS[4]).letter,
+        sub: this.P(e.payer).short + ' จ่าย · หาร ' + e.involved.length + ' คน' + (e.exact ? ' (ระบุจำนวน)' : ''),
+        amountText: this.fmt(e.amount),
+        deltaText: Math.abs(delta) < 0.01 ? '—' : (delta > 0 ? 'ได้คืน ' : 'ค้าง ') + this.fmt(delta),
+        deltaColor: Math.abs(delta) < 0.01 ? MUTED : (delta > 0 ? GREEN : RED),
+      });
+    });
+    groups.forEach(g => { g.sumText = this.fmt(g.sum); });
+
+    const maxSide = Math.max(1, ...L.members.map(id => Math.max(L.paid[id] || 0, L.owe[id] || 0)));
+    const balanceRows = L.members.map(id => {
+      const p = this.P(id), n = L.net[id] || 0;
+      return {
+        name: id === 'me' ? 'คุณ' : p.name, ini: p.ini, bg: p.bg,
+        paidText: this.fmt(L.paid[id] || 0), shareText: this.fmt(L.owe[id] || 0),
+        netText: this.signed(n), color: Math.abs(n) < 0.01 ? MUTED : (n > 0 ? GREEN : RED),
+        label: Math.abs(n) < 0.01 ? 'เคลียร์แล้ว' : (n > 0 ? 'ควรได้คืน' : 'ต้องจ่ายเพิ่ม'),
+        barColor: n >= 0 ? GREEN : RED,
+        barWidth: Math.round(((L.paid[id] || 0) / maxSide) * 100) + '%',
+      };
+    });
+
+    const openTrips = s.trips.filter(x => x.status === 'open').map(x => {
+      const l = this.ledger(x.id), n = l.net.me || 0;
+      return {
+        name: x.name, dates: x.dates, memberCount: x.members.length,
+        pendingText: x.invites.length ? ' · รอตอบรับ ' + x.invites.length : '',
+        totalText: this.fmt(l.total),
+        netText: Math.abs(n) < 0.01 ? '฿0' : this.signed(n),
+        netColor: Math.abs(n) < 0.01 ? MUTED : (n > 0 ? GREEN : RED),
+        netLabel: Math.abs(n) < 0.01 ? 'ไม่มียอดค้าง' : (n > 0 ? 'ควรได้คืน' : 'ค้างจ่าย'),
+        avatars: x.members.map(id => ({ ini: this.P(id).ini, bg: this.P(id).bg })),
+        open: () => this.setState({ screen: 'trip', active: x.id, tab: 'list' }),
+      };
+    });
+
+    const closedTrips = s.trips.filter(x => x.status === 'closed').map(x => {
+      const l = this.ledger(x.id);
+      return {
+        name: x.name, dates: x.dates, memberCount: x.members.length, count: l.count,
+        totalText: this.fmt(l.total), avgText: this.fmt(l.total / Math.max(1, x.members.length)),
+        open: () => this.setState({ screen: 'trip', active: x.id, tab: 'summary' }),
+      };
+    });
+    const lifetime = s.trips.filter(x => x.status === 'closed').reduce((a, x) => a + this.ledger(x.id).total, 0);
+
+    const memberRows = t.members.map(id => {
+      const p = this.P(id), n = L.net[id] || 0;
+      const isOwner = t.owner === id;
+      return {
+        name: id === 'me' ? p.name : p.name, ini: p.ini, bg: p.bg, email: p.email,
+        role: isOwner ? 'เจ้าของทริป' : 'สมาชิก',
+        roleBg: isOwner ? 'rgba(31,111,92,.22)' : '#232E29', roleFg: isOwner ? GREEN : '#97A29D',
+        netText: Math.abs(n) < 0.01 ? '฿0' : this.signed(n),
+        color: Math.abs(n) < 0.01 ? MUTED : (n > 0 ? GREEN : RED),
+        joined: t.joins[id] || 'เข้าร่วมแล้ว',
+      };
+    });
+
+    const pendingRows = t.invites.map((inv, idx) => ({
+      email: inv.email,
+      accept: () => {
+        const known = Object.keys(PEOPLE).find(k => PEOPLE[k].email === inv.email);
+        this.setState(st => ({
+          trips: st.trips.map(x => x.id !== t.id ? x : Object.assign({}, x, {
+            invites: x.invites.filter((_, i) => i !== idx),
+            members: known && !x.members.includes(known) ? x.members.concat([known]) : x.members,
+            joins: known ? Object.assign({}, x.joins, { [known]: 'เข้าร่วมเมื่อสักครู่' }) : x.joins,
+          })),
+        }));
+        this.say(known ? this.P(known).short + ' กดลิงก์เชิญและเข้าร่วมทริปแล้ว' : inv.email + ' เข้าร่วมแล้ว');
+      },
+    }));
+
+    const c = s.create || { name: '', start: '', end: '', email: '', invites: [], code: 'NEW-4KD2' };
+    let crRangeText = 'เลือกวันเริ่มและวันสิ้นสุด', crRangeColor = '#8C948F';
+    if (c.start && c.end) {
+      const days = Math.round((new Date(c.end) - new Date(c.start)) / 86400000);
+      crRangeText = days >= 0 ? (days + 1) + ' วัน ' + Math.max(0, days) + ' คืน' : 'วันสิ้นสุดต้องอยู่หลังวันเริ่ม';
+      crRangeColor = days >= 0 ? GREEN : RED;
+    }
+    const crValid = !!c.name.trim() && !!c.start && !!c.end;
+
+    const d = s.draft || this.newDraft(s.active);
+    const dAmt = Number(d.amount) || 0;
+    const isExact = d.type === 'exact';
+    const perHead = d.involved.length ? dAmt / d.involved.length : 0;
+    const exactSum = d.involved.reduce((a, id) => a + (Number(d.exact[id]) || 0), 0);
+    const remain = dAmt - exactSum;
+    const payMember = s.payTo ? this.P(s.payTo.to) : null;
+    const closed = t.status === 'closed';
+
+    return {
+      isAuth: s.screen === 'auth', isTrips: s.screen === 'trips', isCreate: s.screen === 'create',
+      isMembers: s.screen === 'members', isTrip: s.screen === 'trip', isAdd: s.screen === 'add',
+      isSettle: s.screen === 'settle', isHistory: s.screen === 'history', isPay: !!s.payTo,
+      isList: s.tab === 'list', isSummary: s.tab === 'summary', isEmpty: list.length === 0,
+      hasToast: !!s.toast, toast: s.toast, menuOpen: s.menuOpen,
+
+      signIn: () => this.setState({ screen: 'trips' }),
+      signOut: () => { this.setState({ screen: 'auth' }); },
+      myShort: this.P('me').short,
+
+      openTrips, closedTrips, openCount: openTrips.length, closedCount: closedTrips.length,
+      lifetimeText: this.fmt(lifetime),
+      tabBar: [
+        { label: 'ทริป', glyph: '◎', go: () => this.setState({ screen: 'trips' }), color: s.screen === 'trips' ? GREEN : '#7E8A84' },
+        { label: 'ประวัติ', glyph: '≡', go: () => this.setState({ screen: 'history' }), color: s.screen === 'history' ? GREEN : '#7E8A84' },
+        { label: 'โปรไฟล์', glyph: '☺', go: () => this.say('โปรไฟล์และ PromptPay ยังไม่ได้ทำในโปรโตไทป์'), color: '#7E8A84' },
+      ],
+
+      tripName: t.name, tripDates: t.dates, isClosed: closed,
+      joinedCount: t.members.length, totalText: this.fmt(L.total), expenseCount: L.count,
+      avgText: this.fmt(L.total / Math.max(1, t.members.length)),
+      tripAvatars: t.members.map(id => ({ ini: this.P(id).ini, bg: this.P(id).bg })),
+      groups, balanceRows, memberRows, pendingRows,
+      hasPending: t.invites.length > 0, pendingCount: t.invites.length,
+      tripLink: 'tripsplit.app/join/' + t.code,
+      copyTripLink: () => this.say('คัดลอกลิงก์แล้ว · tripsplit.app/join/' + t.code),
+      inviteMore: () => this.say('ส่งคำเชิญทางอีเมลเรียบร้อย'),
+
+      myNetAbs: this.fmt(myNet), myNetSigned: this.signed(myNet),
+      myNetColor: Math.abs(myNet) < 0.01 ? MUTED : (myNet > 0 ? GREEN : RED),
+      myNetColorOnDark: Math.abs(myNet) < 0.01 ? '#fff' : (myNet > 0 ? '#7FD3B8' : '#F0A08A'),
+      myNetLabel: Math.abs(myNet) < 0.01 ? 'ไม่มียอดค้าง' : (myNet > 0 ? 'คุณควรได้รับคืน' : 'คุณค้างจ่ายเพื่อน'),
+      lastUpdate: s.lastUpdate,
+      canSimulate: !closed,
+      simulate: () => this.simulate(),
+
+      tabListColor: s.tab === 'list' ? INK : MUTED, tabListBorder: s.tab === 'list' ? GREEN : 'transparent',
+      tabSumColor: s.tab === 'summary' ? INK : MUTED, tabSumBorder: s.tab === 'summary' ? GREEN : 'transparent',
+      showList: () => this.setState({ tab: 'list' }), showSummary: () => this.setState({ tab: 'summary' }),
+      goTrips: () => this.setState({ screen: 'trips', create: null }),
+      backToTrip: () => this.setState({ screen: 'trip' }),
+      openMembers: () => this.setState({ screen: 'members', menuOpen: false }),
+      openSettle: () => this.setState({ screen: 'settle' }),
+      openCreate: () => this.setState({ screen: 'create', create: { name: '', start: '2026-12-29', end: '2027-01-01', email: '', invites: [], code: 'NEW-4KD2' } }),
+      toggleMenu: () => this.setState(st => ({ menuOpen: !st.menuOpen })),
+      openAdd: () => {
+        if (closed) { this.say('ทริปนี้ปิดแล้ว · เปิดทริปจากเมนู ··· ก่อนถ้าต้องการบันทึกเพิ่ม'); return; }
+        this.setState({ screen: 'add', draft: this.newDraft(s.active) });
+      },
+      addBtnLabel: closed ? 'ทริปปิดแล้ว · บันทึกเพิ่มไม่ได้' : 'เพิ่มรายการ',
+      addBtnBg: closed ? '#2C3833' : '#1F6F5C', addBtnFg: closed ? '#8E9A94' : '#fff',
+      closeBtnLabel: closed ? 'เปิดทริปอีกครั้ง' : 'ปิดทริปนี้',
+      closeBtnBg: closed ? 'rgba(31,111,92,.22)' : 'rgba(229,138,110,.16)', closeBtnFg: closed ? GREEN : RED,
+      closeHint: closed ? 'เปิดแล้วสมาชิกบันทึกค่าใช้จ่ายต่อได้' : 'ปิดทริปแล้วจะไม่มีใครบันทึกค่าใช้จ่ายเพิ่มได้ ยอดสรุปจะถูกล็อกและย้ายไปหน้าประวัติ',
+      toggleClose: () => this.setTripStatus(t.id, closed ? 'open' : 'closed'),
+
+      crName: c.name, crStart: c.start, crEnd: c.end, crEmail: c.email, crRangeText, crRangeColor,
+      crInvites: c.invites.map((email, i) => ({ email, remove: () => this.patchCreate({ invites: c.invites.filter((_, j) => j !== i) }) })),
+      crLink: 'tripsplit.app/join/' + c.code,
+      setCrName: (ev) => this.patchCreate({ name: ev.target.value }),
+      setCrStart: (ev) => this.patchCreate({ start: ev.target.value }),
+      setCrEnd: (ev) => this.patchCreate({ end: ev.target.value }),
+      setCrEmail: (ev) => this.patchCreate({ email: ev.target.value }),
+      addCrEmail: () => {
+        const v = (c.email || '').trim();
+        if (!/.+@.+\..+/.test(v)) { this.say('ใส่อีเมลให้ถูกรูปแบบก่อนนะ'); return; }
+        this.patchCreate({ invites: c.invites.concat([v]), email: '' });
+      },
+      copyCrLink: () => this.say('คัดลอกลิงก์เชิญแล้ว'),
+      shareCrLink: () => this.say('เปิดหน้าต่างแชร์ของเครื่อง (LINE / ข้อความ)'),
+      crSaveColor: crValid ? GREEN : '#4E5A54', crBtnBg: crValid ? '#1F6F5C' : '#2C3833',
+      submitCreate: () => {
+        if (!crValid) { this.say('ใส่ชื่อทริปและช่วงวันให้ครบก่อน'); return; }
+        const id = 'new' + Date.now();
+        const fmtD = (v) => { const dt = new Date(v); return dt.getDate() + ' ' + ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'][dt.getMonth()]; };
+        const trip = {
+          id, name: c.name.trim(), dates: fmtD(c.start) + ' – ' + fmtD(c.end), status: 'open', owner: 'me',
+          code: c.code, members: ['me'], joins: { me: 'เจ้าของ' }, invites: c.invites.map(email => ({ email })),
+        };
+        this.setState(st => ({
+          trips: [trip].concat(st.trips), expenses: Object.assign({}, st.expenses, { [id]: [] }),
+          settled: Object.assign({}, st.settled, { [id]: [] }),
+          screen: 'members', active: id, tab: 'list', create: null,
+        }));
+        this.say('สร้างทริปแล้ว · ส่งคำเชิญ ' + c.invites.length + ' คน');
+      },
+
+      transfers: transfers.map(tr => ({
+        fromName: tr.from === 'me' ? 'คุณ' : this.P(tr.from).short,
+        toName: tr.to === 'me' ? 'คุณ' : this.P(tr.to).short,
+        fromIni: this.P(tr.from).ini, toIni: this.P(tr.to).ini,
+        fromBg: this.P(tr.from).bg, toBg: this.P(tr.to).bg,
+        amountText: this.fmt(tr.amount),
+        note: tr.from === 'me' ? 'โอนแล้วกดยืนยันเพื่อตัดยอด' : 'รอ ' + this.P(tr.from).short + ' โอน · เตือนได้',
+        btnLabel: tr.from === 'me' ? 'โอนด้วย PromptPay' : 'ส่งข้อความเตือน',
+        btnBg: tr.from === 'me' ? '#1F6F5C' : '#1D2721',
+        btnFg: tr.from === 'me' ? '#0A100D' : INK,
+        btnBorder: tr.from === 'me' ? GREEN : 'rgba(255,255,255,.16)',
+        act: () => {
+          if (tr.from === 'me') this.setState({ payTo: tr });
+          else this.say('เตือน ' + this.P(tr.from).short + ' แล้ว · ยอด ' + this.fmt(tr.amount));
+        },
+      })),
+      transferCount: transfers.length,
+      naiveCount: t.members.length * (t.members.length - 1) / 2,
+      allSettled: transfers.length === 0,
+
+      payToName: payMember ? payMember.short : '', payToPhone: payMember ? payMember.phone : '',
+      payAmountText: s.payTo ? this.fmt(s.payTo.amount) : '',
+      closePay: () => this.setState({ payTo: null }),
+      confirmPay: () => {
+        const tr = s.payTo, tripId = s.active;
+        this.setState(st => ({
+          settled: Object.assign({}, st.settled, { [tripId]: (st.settled[tripId] || []).concat([{ from: tr.from, to: tr.to, amount: tr.amount }]) }),
+          payTo: null, lastUpdate: 'เมื่อสักครู่',
+        }));
+        this.say('ตัดยอดแล้ว · โอนให้ ' + this.P(tr.to).short + ' ' + this.fmt(tr.amount));
+      },
+
+      draftAmountText: d.amount ? '฿' + Number(d.amount).toLocaleString('en-US', { maximumFractionDigits: 2 }) + (d.amount.endsWith('.') ? '.' : '') : '฿0',
+      draftAmountColor: dAmt > 0 ? INK : '#3E4A45',
+      draftTitle: d.title, setTitle: (ev) => this.patch({ title: ev.target.value }),
+      saveColor: dAmt > 0 ? GREEN : '#4E5A54', saveDraft: () => this.saveDraft(),
+      cancelAdd: () => this.setState({ screen: 'trip', draft: null }),
+      keypad: [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['.', '0', 'del']].map(row => ({
+        keys: row.map(k => ({ label: k === 'del' ? '⌫' : k, press: () => this.press(k), bg: k === 'del' ? '#2C3833' : '#1D2721' })),
+      })),
+      cats: CATS.map(cat => ({
+        name: cat.name, pick: () => this.patch({ cat: cat.id }),
+        bg: d.cat === cat.id ? 'rgba(31,111,92,.22)' : '#1D2721', fg: d.cat === cat.id ? GREEN : '#9AA6A0',
+        border: d.cat === cat.id ? 'rgba(31,111,92,.4)' : 'rgba(255,255,255,.14)',
+      })),
+      payerChoices: t.members.map(id => {
+        const p = this.P(id);
+        return {
+          short: id === 'me' ? 'คุณ' : p.short, ini: p.ini, avatarBg: p.bg,
+          pick: () => this.patch({ payer: id }),
+          bg: d.payer === id ? 'rgba(31,111,92,.22)' : '#1D2721', fg: d.payer === id ? GREEN : '#9AA6A0',
+          border: d.payer === id ? 'rgba(31,111,92,.45)' : 'rgba(255,255,255,.12)',
+        };
+      }),
+      isExact, isEqualSplit: !isExact,
+      eqBg: isExact ? 'transparent' : '#1D2721', eqFg: isExact ? '#97A29D' : INK, eqShadow: isExact ? 'none' : '0 1px 2px rgba(255,255,255,.16)',
+      exBg: isExact ? '#1D2721' : 'transparent', exFg: isExact ? INK : '#97A29D', exShadow: isExact ? '0 1px 2px rgba(255,255,255,.16)' : 'none',
+      setEqual: () => this.patch({ type: 'equal' }), setExact: () => this.patch({ type: 'exact' }),
+      remainText: !isExact ? (d.involved.length ? 'คนละ ' + this.fmt(perHead) : 'ยังไม่เลือกคน') : (Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + this.fmt(remain) : 'เกินมา ' + this.fmt(remain))),
+      remainColor: !isExact ? '#97A29D' : (Math.abs(remain) < 0.01 ? GREEN : RED),
+      splitRows: t.members.map(id => {
+        const p = this.P(id), on = d.involved.includes(id);
+        return {
+          name: id === 'me' ? 'คุณ' : p.name, ini: p.ini, bg: p.bg,
+          check: on ? '✓' : '', boxBg: on ? '#1F6F5C' : 'transparent', boxBorder: on ? GREEN : 'rgba(255,255,255,.26)',
+          opacity: on ? '1' : '.35', nameColor: on ? INK : '#7E8A84',
+          amountText: on ? this.fmt(perHead) : '—', amountColor: on ? INK : '#4E5A54',
+          exactValue: d.exact[id] == null ? '' : String(d.exact[id]),
+          setExact: (ev) => this.patch({ exact: Object.assign({}, d.exact, { [id]: ev.target.value.replace(/[^0-9.]/g, '') }) }),
+          toggle: () => this.patch({ involved: on ? d.involved.filter(x => x !== id) : d.involved.concat([id]) }),
+        };
+      }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
