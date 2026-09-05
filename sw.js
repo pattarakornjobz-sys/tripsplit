@@ -1,7 +1,7 @@
-const CACHE = 'tripsplit-v2';
+const CACHE = 'tripsplit-v1';
 const SHELL = [
-  'index.html', 'trips.html', 'create.html', 'trip.html', 'join.html', 'history.html', 'account.html',
-  'style.css', 'theme.css', 'app.js', 'manifest.json',
+  'index.html', 'trips.html', 'create.html', 'trip.html', 'join.html', 'history.html',
+  'style.css', 'app.js', 'manifest.json',
   'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
