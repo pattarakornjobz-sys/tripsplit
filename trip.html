@@ -32,11 +32,11 @@
     <div class="subtab" data-tab="summary">สรุป</div>
   </div>
 
-  <div class="scroll" id="scroll"></div>
-
-  <div id="fab" style="position:sticky;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom,0) + 12px);background:linear-gradient(180deg,rgba(239,237,232,0),var(--bg) 30%);display:none;">
-    <button class="btn btn-primary" id="btnAddExpense">+ เพิ่มค่าใช้จ่าย</button>
+  <div id="fab" style="padding:10px 16px 4px;display:none;">
+    <button class="btn btn-primary" id="btnAddExpense" style="border-radius:25px;">+ เพิ่มค่าใช้จ่าย</button>
   </div>
+
+  <div class="scroll" id="scroll"></div>
 </div>
 
 <div id="modalRoot"></div>
@@ -271,8 +271,18 @@ function bindTabEvents() {
 }
 
 /* ---------- Add expense modal ---------- */
+// A brand-new trip has no other members yet, so always offer yourself as payer.
+// Leaving it unset would mean "no payer" rather than "me".
+function payerOptions() {
+  const list = MEMBERS.slice();
+  if (!list.some(m => m.user_id === ME.id)) {
+    list.unshift({ user_id: ME.id, profile: { display_name: 'คุณ' } });
+  }
+  return list;
+}
+
 function openExpenseModal() {
-  const state = { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: MEMBERS.map(m => m.user_id), exact: {} };
+  const state = { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
   const root = document.getElementById('modalRoot');
 
   function renderModal() {
@@ -293,17 +303,17 @@ function openExpenseModal() {
         </div>
         <div class="field">
           <label>ใครจ่าย</label>
-          <select id="mPayer">${MEMBERS.map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}</select>
+          <select id="mPayer">${payerOptions().map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}</select>
         </div>
         <div class="field">
           <label>วิธีหาร</label>
           <div style="display:flex;gap:6px;">
-            <div class="subtab ${state.splitType === 'equal' ? 'subtab-active' : ''}" id="mEqual" style="background:#fff;">หารเท่ากัน</div>
-            <div class="subtab ${state.splitType === 'exact' ? 'subtab-active' : ''}" id="mExact" style="background:#fff;">ระบุเอง</div>
+            <div class="subtab ${state.splitType === 'equal' ? 'subtab-active' : ''}" id="mEqual">หารเท่ากัน</div>
+            <div class="subtab ${state.splitType === 'exact' ? 'subtab-active' : ''}" id="mExact">ระบุเอง</div>
           </div>
         </div>
         <div id="splitRows">
-          ${MEMBERS.map(m => {
+          ${payerOptions().map(m => {
             const on = state.involved.includes(m.user_id);
             if (state.splitType === 'equal') {
               return `<div class="mrow" data-id="${m.user_id}" style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;">
