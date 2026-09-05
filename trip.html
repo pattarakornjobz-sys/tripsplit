@@ -35,6 +35,7 @@
 
   <div id="fab" style="padding:10px 16px 2px;display:none;">
     <button class="btn btn-primary" id="btnAddExpense" style="height:48px;border-radius:24px;">+ เพิ่มค่าใช้จ่าย</button>
+    <div id="btnAddMulti" style="text-align:center;margin-top:8px;font-size:12.5px;color:var(--muted);cursor:pointer;">+ เพิ่มหลายรายการพร้อมกัน</div>
   </div>
 
   <div class="scroll" id="scroll"><div class="empty">กำลังโหลด...</div></div>
@@ -58,6 +59,7 @@ async function load() {
   document.getElementById('btnBack').addEventListener('click', () => location.href = 'trips.html');
   document.querySelectorAll('.subtab').forEach(el => el.addEventListener('click', () => { TAB = el.dataset.tab; render(); }));
   document.getElementById('btnAddExpense').addEventListener('click', () => openExpenseModal());
+  document.getElementById('btnAddMulti').addEventListener('click', openMultiExpenseModal);
   document.getElementById('btnMenu').addEventListener('click', openTripMenu);
 
   await fetchAll();
@@ -404,6 +406,151 @@ function payerOptions() {
   return list;
 }
 
+/* ---------- Add several expenses at once (equal-split only) ---------- */
+function openMultiExpenseModal() {
+  const root = document.getElementById('modalRoot');
+  const state = {
+    payer: ME.id,
+    involved: payerOptions().map(m => m.user_id),
+    rows: [{ title: '', amount: '', category: 'other' }, { title: '', amount: '', category: 'other' }, { title: '', amount: '', category: 'other' }],
+  };
+
+  function renderModal() {
+    const active = document.activeElement;
+    let activeSelector = null, selStart = null, selEnd = null;
+    if (active && root.contains(active) && active.dataset && active.dataset.row !== undefined) {
+      activeSelector = '[data-row="' + active.dataset.row + '"][data-field="' + active.dataset.field + '"]';
+      if (typeof active.selectionStart === 'number') { selStart = active.selectionStart; selEnd = active.selectionEnd; }
+    }
+
+    const validRows = state.rows.filter(r => r.title.trim() && Number(r.amount) > 0);
+    const total = validRows.reduce((a, r) => a + Number(r.amount), 0);
+
+    root.innerHTML = `
+    <div class="modal-bg" id="mmBg">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <h3>เพิ่มหลายรายการพร้อมกัน</h3>
+        <div style="font-size:12px;line-height:1.6;color:var(--faint);margin-bottom:10px;">สำหรับรายการที่หารเท่ากันทั้งหมด เช่น ค่าที่พัก ค่ามัดจำ ค่าเช่า — ถ้ารายการไหนต้องระบุสัดส่วนเอง ให้เพิ่มทีละรายการแทน</div>
+        <div id="mmRows">
+          ${state.rows.map((r, i) => `
+            <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+              <input data-row="${i}" data-field="title" type="text" placeholder="ชื่อรายการ" value="${escapeAttr(r.title)}" style="flex:2;height:44px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--ink);padding:0 10px;font-size:13.5px;min-width:0;">
+              <input data-row="${i}" data-field="amount" type="number" inputmode="decimal" placeholder="0" value="${escapeAttr(r.amount)}" style="flex:1;height:44px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--ink);padding:0 10px;font-size:13.5px;min-width:0;text-align:right;">
+              <select data-row="${i}" data-field="category" style="height:44px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--ink);font-size:12.5px;flex-shrink:0;">
+                ${CATS.map(c => `<option value="${c.id}" ${c.id === r.category ? 'selected' : ''}>${c.name}</option>`).join('')}
+              </select>
+              ${state.rows.length > 1 ? `<div data-remove="${i}" style="width:30px;height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--red);cursor:pointer;font-size:18px;">×</div>` : '<div style="width:30px;flex-shrink:0;"></div>'}
+            </div>`).join('')}
+        </div>
+        <div id="mmAddRow" style="text-align:center;padding:8px 0;font-size:13px;color:var(--green-text);cursor:pointer;">+ เพิ่มอีกรายการ</div>
+
+        <div class="divider"></div>
+        <div class="field">
+          <label>ใครจ่าย (ใช้กับทุกรายการด้านบน)</label>
+          <select id="mmPayer">${payerOptions().map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}</select>
+        </div>
+        <div class="field">
+          <label>หารเท่ากันระหว่าง</label>
+          <div id="mmMembers">
+            ${payerOptions().map(m => {
+              const on = state.involved.includes(m.user_id);
+              return `<div class="mrow" data-mid="${m.user_id}" style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer;">
+                <div style="width:20px;height:20px;border-radius:6px;border:1.5px solid ${on ? 'var(--green)' : 'var(--border)'};background:${on ? 'var(--green)' : 'transparent'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;">${on ? '✓' : ''}</div>
+                <div style="flex:1;font-size:13.5px;color:${on ? 'var(--ink)' : 'var(--faint)'};">${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin:6px 0 4px;">
+          <span>${validRows.length} รายการที่กรอกครบ</span>
+          <span style="font-weight:600;color:var(--ink);">${money(total, TRIP.currency)}</span>
+        </div>
+        <button class="btn btn-primary" id="mmSave" style="margin-top:10px;border-radius:24px;" ${validRows.length ? '' : 'disabled'}>บันทึกทั้งหมด (${validRows.length} รายการ)</button>
+        <button class="btn btn-outline" id="mmCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
+      </div>
+    </div>`;
+
+    document.getElementById('mmBg').addEventListener('click', close);
+    document.getElementById('mmCancel').addEventListener('click', close);
+    root.querySelectorAll('[data-row]').forEach(inp => {
+      const evt = inp.tagName === 'SELECT' ? 'change' : 'input';
+      inp.addEventListener(evt, e => {
+        state.rows[+e.target.dataset.row][e.target.dataset.field] = e.target.value;
+        renderModal();
+      });
+    });
+    root.querySelectorAll('[data-remove]').forEach(el => el.addEventListener('click', () => {
+      state.rows.splice(+el.dataset.remove, 1);
+      renderModal();
+    }));
+    document.getElementById('mmAddRow').addEventListener('click', () => {
+      state.rows.push({ title: '', amount: '', category: 'other' });
+      renderModal();
+    });
+    document.getElementById('mmPayer').addEventListener('change', e => { state.payer = e.target.value; });
+    root.querySelectorAll('#mmMembers .mrow').forEach(row => row.addEventListener('click', () => {
+      const id = row.dataset.mid;
+      state.involved = state.involved.includes(id) ? state.involved.filter(x => x !== id) : state.involved.concat([id]);
+      renderModal();
+    }));
+    document.getElementById('mmSave').addEventListener('click', saveAll);
+
+    if (activeSelector) {
+      const toFocus = root.querySelector(activeSelector);
+      if (toFocus) {
+        toFocus.focus();
+        if (selStart !== null && toFocus.setSelectionRange) {
+          try { toFocus.setSelectionRange(selStart, selEnd); } catch (e) {}
+        }
+      }
+    }
+  }
+
+  function close() { root.innerHTML = ''; }
+
+  async function saveAll() {
+    const validRows = state.rows.filter(r => r.title.trim() && Number(r.amount) > 0);
+    if (!validRows.length) { toast('กรอกอย่างน้อย 1 รายการให้ครบ'); return; }
+    if (!state.involved.length) { toast('เลือกคนที่ร่วมหารอย่างน้อย 1 คน'); return; }
+
+    const saveBtn = document.getElementById('mmSave');
+    saveBtn.disabled = true;
+    let done = 0, failed = 0;
+
+    for (const r of validRows) {
+      saveBtn.textContent = `กำลังบันทึก (${done + 1}/${validRows.length})...`;
+      const amount = Number(r.amount);
+      const per = Math.round((amount / state.involved.length) * 100) / 100;
+      let assigned = 0;
+      const shareRows = state.involved.map((id, i) => {
+        const isLast = i === state.involved.length - 1;
+        const amt = isLast ? Math.round((amount - assigned) * 100) / 100 : per;
+        assigned += amt;
+        return { user_id: id, amount: amt };
+      });
+
+      const { data: expense, error } = await sb.from('ts_expenses')
+        .insert({ trip_id: tripId, payer_id: state.payer, title: r.title.trim(), amount, category: r.category, split_type: 'equal', created_by: ME.id })
+        .select().single();
+      if (error) { failed++; continue; }
+
+      const { error: shareErr } = await sb.from('ts_expense_shares')
+        .insert(shareRows.map(s => ({ expense_id: expense.id, user_id: s.user_id, amount: s.amount })));
+      if (shareErr) { failed++; continue; }
+      done++;
+    }
+
+    if (failed) toast(`บันทึกสำเร็จ ${done} รายการ, ล้มเหลว ${failed} รายการ`);
+    else toast(`เพิ่ม ${done} รายการแล้ว`);
+    close();
+    await fetchAll(); render();
+  }
+
+  renderModal();
+}
+
+/* ---------- Add / edit a single expense ---------- */
 // Pass an expense row to edit it; call with no argument to add a new one.
 function openExpenseModal(existing) {
   const editing = !!existing;
@@ -433,6 +580,16 @@ function openExpenseModal(existing) {
     const perHead = Number(state.amount || 0) / involvedCount;
     const exactSum = splitCandidates().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
     const remain = Number(state.amount || 0) - exactSum;
+
+    // Remember what was focused (and cursor position) before we blow away
+    // the DOM, so continuous typing doesn't get interrupted every keystroke.
+    const active = document.activeElement;
+    let activeSelector = null, selStart = null, selEnd = null;
+    if (active && root.contains(active)) {
+      if (active.id) activeSelector = '#' + active.id;
+      else if (active.dataset && active.dataset.exact) activeSelector = '[data-exact="' + active.dataset.exact + '"]';
+      if (typeof active.selectionStart === 'number') { selStart = active.selectionStart; selEnd = active.selectionEnd; }
+    }
 
     root.innerHTML = `
     <div class="modal-bg" id="modalBg">
@@ -494,9 +651,18 @@ function openExpenseModal(existing) {
     root.querySelectorAll('[data-exact]').forEach(inp => inp.addEventListener('input', e => {
       state.exact[e.target.dataset.exact] = e.target.value;
       renderModal();
-      document.querySelectorAll('[data-exact]').forEach(i2 => { if (i2.dataset.exact === e.target.dataset.exact) i2.focus(); });
     }));
     document.getElementById('mSave').addEventListener('click', saveExpense);
+
+    if (activeSelector) {
+      const toFocus = root.querySelector(activeSelector);
+      if (toFocus) {
+        toFocus.focus();
+        if (selStart !== null && toFocus.setSelectionRange) {
+          try { toFocus.setSelectionRange(selStart, selEnd); } catch (e) {}
+        }
+      }
+    }
   }
 
   function close() { root.innerHTML = ''; }
