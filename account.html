@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>บัญชีของฉัน — TripSplit</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#EFEDE8" id="themeColorMeta">
+<meta name="theme-color" content="#EFEDE8">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -24,13 +24,13 @@
       <div class="eyebrow">บัญชีของฉัน</div>
       <h1>โปรไฟล์</h1>
     </div>
-    <button class="copy-btn ghost" id="btnEdit" style="height:38px;border-radius:20px;padding:0 16px;font-size:13px;background:var(--green-tint);color:var(--green-text);">แก้ไข</button>
+    <button class="copy-btn" id="btnEdit" style="height:38px;border-radius:20px;padding:0 16px;background:var(--green-tint);color:var(--green-text);">แก้ไข</button>
   </div>
 
   <div class="scroll" id="scroll">
 
     <div class="acct-hero">
-      <div class="avatar" id="meAvatar"></div>
+      <div class="avatar" id="meAvatar" style="width:60px;height:60px;font-size:23px;"></div>
       <div style="flex:1;min-width:0;">
         <div class="acct-name" id="meName">—</div>
         <div class="acct-email" id="meEmail"></div>
@@ -41,11 +41,11 @@
     <div class="note">ชื่อเล่นและช่องทางรับเงินนี้จะแสดงให้ <strong>เพื่อนร่วมทริปเท่านั้น</strong> เห็นเฉพาะเลขท้าย 4 ตัว และกดคัดลอกได้โดยไม่ต้องเปิดเผยเลขทั้งหมด</div>
 
     <div class="section-label">ช่องทางรับเงิน</div>
-    <div class="rows" id="payRows">
+    <div class="rows">
       <div class="row">
         <div class="row-icon">฿</div>
         <div class="row-body">
-          <div class="row-label">PromptPay · เบอร์โทร</div>
+          <div class="row-label">พร้อมเพย์ · เบอร์โทร</div>
           <div class="row-value" id="phoneValue">—</div>
         </div>
         <button class="icon-btn" id="phoneEye" aria-label="แสดง/ซ่อนเบอร์โทร">⌢</button>
@@ -139,7 +139,7 @@
     </div>
 
     <div class="field">
-      <label for="fPhone">เบอร์โทร (ใช้เป็น PromptPay)</label>
+      <label for="fPhone">เบอร์โทร (ใช้เป็นพร้อมเพย์)</label>
       <input id="fPhone" inputmode="numeric" placeholder="081-234-5678" maxlength="14">
     </div>
 
@@ -176,8 +176,9 @@ const BANKS = [
 ];
 
 let ME = null;
-let P = { nickname: '', display_name: '', email: '', phone: '', bank_code: 'scb', bank_account: '', account_holder: '', qr_url: '', pay_method: null };
+let P = { nickname: '', display_name: '', email: '', phone: '', bank_code: 'scb', bank_account: '', account_holder: '', qr_url: '', pay_method: null, avatar_url: null };
 let show = { phone: false, acct: false };
+let formBank = 'scb';
 
 function bankOf(code) { return BANKS.find(b => b.id === code) || BANKS[0]; }
 
@@ -188,12 +189,12 @@ async function load() {
   renderThemeSeg();
 
   const { data, error } = await sb.from('profiles').select('*').eq('id', ME.id).single();
-  if (error) { toast('โหลดโปรไฟล์ไม่สำเร็จ: ' + error.message); }
+  if (error) toast('โหลดโปรไฟล์ไม่สำเร็จ: ' + error.message);
   const meta = ME.user_metadata || {};
   const row = data || {};
   P = {
     nickname: row.nickname || '',
-    display_name: row.display_name || meta.full_name || meta.name || ME.email.split('@')[0],
+    display_name: row.display_name || meta.full_name || meta.name || (ME.email || '').split('@')[0],
     email: row.email || ME.email,
     phone: row.phone || '',
     bank_code: row.bank_code || 'scb',
@@ -210,6 +211,7 @@ function paint() {
   const name = P.nickname || P.display_name;
   document.getElementById('meName').textContent = name;
   document.getElementById('meEmail').textContent = P.email;
+
   const av = document.getElementById('meAvatar');
   if (P.avatar_url) {
     av.style.background = 'transparent';
@@ -227,6 +229,7 @@ function paint() {
   document.getElementById('holderValue').textContent = P.account_holder || '—';
   document.getElementById('phoneEye').textContent = show.phone ? '⌣' : '⌢';
   document.getElementById('acctEye').textContent = show.acct ? '⌣' : '⌢';
+
   paintQr();
   paintPref();
 }
@@ -245,15 +248,12 @@ function paintQr() {
 
 function paintPref() {
   const pref = P.pay_method || payMethodOf(P);
-  const subs = {
-    promptpay: P.phone ? maskDigits(P.phone, 4) : 'ยังไม่ได้ใส่เบอร์ — กด “แก้ไข”',
-    bank: P.bank_account ? bankOf(P.bank_code).name + ' · ' + maskDigits(P.bank_account, 4) : 'ยังไม่ได้ใส่เลขบัญชี — กด “แก้ไข”',
-    qr: P.qr_url ? 'แนบรูป QR แล้ว' : 'ยังไม่ได้แนบรูป QR',
-  };
   const ready = { promptpay: !!P.phone, bank: !!P.bank_account, qr: !!P.qr_url };
-  document.getElementById('prefPhoneSub').textContent = subs.promptpay;
-  document.getElementById('prefBankSub').textContent = subs.bank;
-  document.getElementById('prefQrSub').textContent = subs.qr;
+  document.getElementById('prefPhoneSub').textContent = P.phone ? maskDigits(P.phone, 4) : 'ยังไม่ได้ใส่เบอร์ — กด “แก้ไข”';
+  document.getElementById('prefBankSub').textContent = P.bank_account
+    ? bankOf(P.bank_code).name + ' · ' + maskDigits(P.bank_account, 4)
+    : 'ยังไม่ได้ใส่เลขบัญชี — กด “แก้ไข”';
+  document.getElementById('prefQrSub').textContent = P.qr_url ? 'แนบรูป QR แล้ว' : 'ยังไม่ได้แนบรูป QR';
   document.querySelectorAll('#prefRows .pick').forEach(el => {
     const m = el.dataset.method;
     el.setAttribute('aria-checked', String(m === pref));
@@ -271,64 +271,7 @@ async function setPref(method) {
   toast('ตั้งเป็นช่องทางที่สะดวกแล้ว · ' + PAY_METHODS[method].label);
 }
 
-/* ---- copy / reveal ---- */
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('phoneEye').addEventListener('click', () => { show.phone = !show.phone; paint(); });
-  document.getElementById('acctEye').addEventListener('click', () => { show.acct = !show.acct; paint(); });
-  document.getElementById('phoneCopy').addEventListener('click', () => copyText(P.phone, 'เบอร์'));
-  document.getElementById('acctCopy').addEventListener('click', () => copyText(P.bank_account, 'เลขบัญชี'));
-  document.getElementById('holderCopy').addEventListener('click', () => copyText(P.account_holder, 'ชื่อบัญชี'));
-
-  const qrFile = document.getElementById('qrFile');
-  document.getElementById('qrDrop').addEventListener('click', () => qrFile.click());
-  document.getElementById('qrReplace').addEventListener('click', (e) => { e.stopPropagation(); qrFile.click(); });
-  document.getElementById('qrRemove').addEventListener('click', async (e) => {
-    e.stopPropagation();
-    if (!confirm('ลบรูป QR นี้?')) return;
-    await removeQrImage(ME.id);
-    const patch = { qr_url: null };
-    if (P.pay_method === 'qr') patch.pay_method = null;
-    await sb.from('profiles').update(patch).eq('id', ME.id);
-    P.qr_url = ''; if (patch.pay_method === null) P.pay_method = payMethodOf(P);
-    paint();
-    toast('ลบรูป QR แล้ว');
-  });
-  qrFile.addEventListener('change', async () => {
-    const f = qrFile.files && qrFile.files[0];
-    qrFile.value = '';
-    if (!f) return;
-    if (!/^image\//.test(f.type)) { toast('ต้องเป็นไฟล์รูปภาพ'); return; }
-    toast('กำลังอัปโหลดรูป QR...');
-    try {
-      const url = await uploadQrImage(ME.id, f);
-      const patch = { qr_url: url };
-      if (!P.pay_method) patch.pay_method = 'qr';
-      const { error } = await sb.from('profiles').update(patch).eq('id', ME.id);
-      if (error) throw error;
-      P.qr_url = url; if (patch.pay_method) P.pay_method = patch.pay_method;
-      paint();
-      toast('อัปโหลด QR แล้ว · ครอบเป็น 1:1 ให้เรียบร้อย');
-    } catch (err) {
-      toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err));
-    }
-  });
-
-  document.querySelectorAll('#prefRows .pick').forEach(el => {
-    el.addEventListener('click', () => setPref(el.dataset.method));
-  });
-
-  document.getElementById('btnSignOut').addEventListener('click', () => { if (confirm('ออกจากระบบ?')) signOut(); });
-  document.getElementById('btnEdit').addEventListener('click', openEdit);
-  document.getElementById('editCancel').addEventListener('click', closeEdit);
-  document.getElementById('editModal').addEventListener('click', (e) => { if (e.target.id === 'editModal') closeEdit(); });
-  document.getElementById('btnSave').addEventListener('click', save);
-  document.getElementById('fAcct').addEventListener('input', updateAcctHint);
-  load();
-});
-
-/* ---- edit sheet ---- */
-let formBank = 'scb';
-
+/* ---------- edit sheet ---------- */
 function openEdit() {
   document.getElementById('fNick').value = P.nickname || P.display_name;
   document.getElementById('fPhone').value = P.phone || '';
@@ -351,7 +294,8 @@ function renderBankChips() {
       + 'border:1px solid ' + (on ? 'rgba(31,111,92,.45)' : 'var(--border-strong)') + ';">' + b.name + '</button>';
   }).join('');
   box.querySelectorAll('button').forEach(el => el.addEventListener('click', () => {
-    formBank = el.dataset.bank; renderBankChips();
+    formBank = el.dataset.bank;
+    renderBankChips();
   }));
 }
 
@@ -385,6 +329,64 @@ async function save() {
   paint();
   toast('บันทึกโปรไฟล์แล้ว · เพื่อนจะเห็นชื่อ “' + nickname + '”');
 }
+
+/* ---------- events ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('phoneEye').addEventListener('click', () => { show.phone = !show.phone; paint(); });
+  document.getElementById('acctEye').addEventListener('click', () => { show.acct = !show.acct; paint(); });
+  document.getElementById('phoneCopy').addEventListener('click', () => copyText(P.phone, 'เบอร์'));
+  document.getElementById('acctCopy').addEventListener('click', () => copyText(P.bank_account, 'เลขบัญชี'));
+  document.getElementById('holderCopy').addEventListener('click', () => copyText(P.account_holder, 'ชื่อบัญชี'));
+
+  const qrFile = document.getElementById('qrFile');
+  document.getElementById('qrDrop').addEventListener('click', () => qrFile.click());
+  document.getElementById('qrReplace').addEventListener('click', (e) => { e.stopPropagation(); qrFile.click(); });
+  document.getElementById('qrRemove').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!confirm('ลบรูป QR นี้?')) return;
+    await removeQrImage(ME.id);
+    const patch = { qr_url: null };
+    if (P.pay_method === 'qr') patch.pay_method = null;
+    await sb.from('profiles').update(patch).eq('id', ME.id);
+    P.qr_url = '';
+    if (patch.pay_method === null) P.pay_method = null;
+    paint();
+    toast('ลบรูป QR แล้ว');
+  });
+  qrFile.addEventListener('change', async () => {
+    const f = qrFile.files && qrFile.files[0];
+    qrFile.value = '';
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { toast('ต้องเป็นไฟล์รูปภาพ'); return; }
+    toast('กำลังอัปโหลดรูป QR...');
+    try {
+      const url = await uploadQrImage(ME.id, f);
+      const patch = { qr_url: url };
+      if (!P.pay_method) patch.pay_method = 'qr';
+      const { error } = await sb.from('profiles').update(patch).eq('id', ME.id);
+      if (error) throw error;
+      P.qr_url = url;
+      if (patch.pay_method) P.pay_method = patch.pay_method;
+      paint();
+      toast('อัปโหลด QR แล้ว · ครอบเป็น 1:1 ให้เรียบร้อย');
+    } catch (err) {
+      toast('อัปโหลดไม่สำเร็จ: ' + (err.message || err));
+    }
+  });
+
+  document.querySelectorAll('#prefRows .pick').forEach(el => {
+    el.addEventListener('click', () => setPref(el.dataset.method));
+  });
+
+  document.getElementById('btnEdit').addEventListener('click', openEdit);
+  document.getElementById('editCancel').addEventListener('click', closeEdit);
+  document.getElementById('editModal').addEventListener('click', (e) => { if (e.target.id === 'editModal') closeEdit(); });
+  document.getElementById('btnSave').addEventListener('click', save);
+  document.getElementById('fAcct').addEventListener('input', updateAcctHint);
+  document.getElementById('btnSignOut').addEventListener('click', () => { if (confirm('ออกจากระบบ?')) signOut(); });
+
+  load();
+});
 </script>
 </body>
 </html>

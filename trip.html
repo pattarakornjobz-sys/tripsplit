@@ -5,15 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ทริป — Trip Split</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#16201C">
+<meta name="theme-color" content="#EFEDE8">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TripSplit">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
+<script>initTheme();</script>
 </head>
 <body>
 <div class="phone">
@@ -30,11 +32,11 @@
     <div class="subtab" data-tab="summary">สรุป</div>
   </div>
 
-  <div class="scroll" id="scroll"></div>
-
-  <div id="fab" style="position:sticky;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom,0) + 12px);background:linear-gradient(180deg,rgba(239,237,232,0),var(--bg) 30%);display:none;">
-    <button class="btn btn-primary" id="btnAddExpense">+ เพิ่มค่าใช้จ่าย</button>
+  <div id="fab" style="padding:10px 16px 2px;display:none;">
+    <button class="btn btn-primary" id="btnAddExpense" style="height:48px;border-radius:24px;">+ เพิ่มค่าใช้จ่าย</button>
   </div>
+
+  <div class="scroll" id="scroll"></div>
 </div>
 
 <div id="modalRoot"></div>
@@ -72,7 +74,7 @@ async function fetchAll() {
   TRIP = trip;
 
   const { data: members, error: memErr } = await sb.from('trip_members')
-    .select('user_id, role, profile:profiles!trip_members_user_id_profiles_fkey(id,display_name,avatar_url,email)')
+    .select('user_id, role, profile:profiles!trip_members_user_id_profiles_fkey(id,display_name,avatar_url,email,nickname,phone,bank_code,bank_account,account_holder,qr_url,pay_method)')
     .eq('trip_id', tripId);
   if (memErr) { toast('โหลดสมาชิกไม่สำเร็จ: ' + memErr.message); }
   MEMBERS = members || [];
@@ -137,7 +139,7 @@ function renderMembers() {
 
   const pending = INVITES.map(iv => `
     <div class="card card-static" style="display:flex;align-items:center;gap:12px;">
-      <div class="avatar" style="width:38px;height:38px;background:#C3C8C5;">${initials(iv.email)}</div>
+      <div class="avatar" style="width:38px;height:38px;background:var(--disabled);">${initials(iv.email)}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:14.5px;color:var(--ink);">${escapeHtml(iv.email)}</div>
         <div style="font-size:12px;color:var(--faint);">ยังไม่เข้าร่วม</div>
@@ -167,7 +169,7 @@ function renderMembers() {
 }
 
 function renderExpenses() {
-  if (!EXPENSES.length) return '<div class="empty">ยังไม่มีรายการค่าใช้จ่าย<br>' + (TRIP.status === 'open' ? 'กด “เพิ่มค่าใช้จ่าย” ด้านล่าง' : '') + '</div>';
+  if (!EXPENSES.length) return '<div class="empty">ยังไม่มีรายการค่าใช้จ่าย<br>' + (TRIP.status === 'open' ? 'กดปุ่ม “+ เพิ่มค่าใช้จ่าย” ด้านบน' : '') + '</div>';
   const catName = id => (CATS.find(c => c.id === id) || { name: 'อื่นๆ' }).name;
   return EXPENSES.map(e => `
     <div class="card card-static" style="display:flex;align-items:center;gap:12px;">
@@ -211,7 +213,15 @@ function renderSummary() {
         <div style="font-size:13px;color:var(--ink);flex:1;">${escapeHtml(P(tr.from).display_name)} → ${escapeHtml(P(tr.to).display_name)}</div>
         <div style="font-size:14.5px;font-weight:600;color:var(--ink);">${money(tr.amount, TRIP.currency)}</div>
       </div>
-      ${tr.from === ME.id ? `<button class="btn btn-primary" data-confirm="${i}" style="height:38px;margin-top:10px;font-size:13px;">ยืนยันว่าโอนแล้ว</button>` : `<div style="margin-top:8px;font-size:11.5px;color:var(--faint);">รอ ${escapeHtml(P(tr.from).display_name)} โอน</div>`}
+      <div data-payee="${i}" style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:13px;background:var(--fill);cursor:pointer;">
+        <div class="row-icon" style="width:32px;height:32px;border-radius:11px;font-size:13px;">${payMethodOf(P(tr.to)) ? PAY_METHODS[payMethodOf(P(tr.to))].icon : '?'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12.5px;font-weight:600;color:var(--ink);">${escapeHtml(P(tr.to).nickname || P(tr.to).display_name)} ${payMethodSummary(P(tr.to))}</div>
+          <div style="margin-top:2px;font-size:11px;color:var(--faint);">แตะเพื่อดูเลข / QR แล้วคัดลอกไปโอน</div>
+        </div>
+        <div style="color:var(--faint);font-size:15px;">›</div>
+      </div>
+      ${tr.from === ME.id ? `<button class="btn btn-primary" data-confirm="${i}" style="height:38px;margin-top:10px;font-size:13px;">ยืนยันว่าโอนแล้ว</button>` : `<div style="margin-top:8px;font-size:11.5px;color:var(--faint);">รอ ${escapeHtml(P(tr.from).nickname || P(tr.from).display_name)} โอน</div>`}
     </div>`).join('') : '<div class="empty">ยอดลงตัวแล้ว ไม่มีใครติดใคร 🎉</div>';
 
   window.__transfers = transfers;
@@ -221,8 +231,8 @@ function renderSummary() {
     : '';
 
   return `
-    <div class="card card-static" style="background:#16201C;color:#fff;">
-      <div style="font-size:11.5px;color:rgba(255,255,255,.6);">ยอดรวมค่าใช้จ่ายทั้งทริป</div>
+    <div class="card card-static" style="background:var(--hero);color:var(--hero-ink);">
+      <div style="font-size:11.5px;color:var(--faint);">ยอดรวมค่าใช้จ่ายทั้งทริป</div>
       <div style="margin-top:6px;font-size:30px;font-weight:600;letter-spacing:-.02em;">${money(total, TRIP.currency)}</div>
     </div>
     <div class="section-label">ยอดสุทธิแต่ละคน</div>
@@ -250,6 +260,10 @@ function bindTabEvents() {
     toast('เพิ่มคำเชิญแล้ว');
     await fetchAll(); render();
   });
+  document.querySelectorAll('[data-payee]').forEach(el => el.addEventListener('click', () => {
+    const tr = window.__transfers[+el.dataset.payee];
+    openPayeeSheet(P(tr.to), tr.amount, TRIP.currency);
+  }));
   document.querySelectorAll('[data-confirm]').forEach(btn => btn.addEventListener('click', async () => {
     const tr = window.__transfers[+btn.dataset.confirm];
     btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
@@ -269,14 +283,24 @@ function bindTabEvents() {
 }
 
 /* ---------- Add expense modal ---------- */
+// A brand-new trip may not have its members row yet, so always offer yourself:
+// leaving the payer unset would mean "nobody paid" instead of "me".
+function payerOptions() {
+  const list = MEMBERS.slice();
+  if (!list.some(m => m.user_id === ME.id)) {
+    list.unshift({ user_id: ME.id, profile: { id: ME.id, display_name: 'คุณ' } });
+  }
+  return list;
+}
+
 function openExpenseModal() {
-  const state = { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: MEMBERS.map(m => m.user_id), exact: {} };
+  const state = { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
   const root = document.getElementById('modalRoot');
 
   function renderModal() {
     const involvedCount = state.involved.length || 1;
     const perHead = Number(state.amount || 0) / involvedCount;
-    const exactSum = MEMBERS.reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
+    const exactSum = payerOptions().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
     const remain = Number(state.amount || 0) - exactSum;
 
     root.innerHTML = `
@@ -291,23 +315,23 @@ function openExpenseModal() {
         </div>
         <div class="field">
           <label>ใครจ่าย</label>
-          <select id="mPayer">${MEMBERS.map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}</select>
+          <select id="mPayer">${payerOptions().map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}</select>
         </div>
         <div class="field">
           <label>วิธีหาร</label>
           <div style="display:flex;gap:6px;">
-            <div class="subtab ${state.splitType === 'equal' ? 'subtab-active' : ''}" id="mEqual" style="background:#fff;">หารเท่ากัน</div>
-            <div class="subtab ${state.splitType === 'exact' ? 'subtab-active' : ''}" id="mExact" style="background:#fff;">ระบุเอง</div>
+            <div class="subtab ${state.splitType === 'equal' ? 'subtab-active' : ''}" id="mEqual">หารเท่ากัน</div>
+            <div class="subtab ${state.splitType === 'exact' ? 'subtab-active' : ''}" id="mExact">ระบุเอง</div>
           </div>
         </div>
         <div id="splitRows">
-          ${MEMBERS.map(m => {
+          ${payerOptions().map(m => {
             const on = state.involved.includes(m.user_id);
             if (state.splitType === 'equal') {
               return `<div class="mrow" data-id="${m.user_id}" style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;">
                 <div style="width:20px;height:20px;border-radius:6px;border:1.5px solid ${on ? 'var(--green)' : 'var(--border)'};background:${on ? 'var(--green)' : 'transparent'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;">${on ? '✓' : ''}</div>
                 <div style="flex:1;font-size:13.5px;color:${on ? 'var(--ink)' : 'var(--faint)'};">${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</div>
-                <div style="font-size:13px;color:${on ? 'var(--ink)' : '#C3C8C5'};">${on ? money(perHead, TRIP.currency) : '—'}</div>
+                <div style="font-size:13px;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on ? money(perHead, TRIP.currency) : '—'}</div>
               </div>`;
             } else {
               return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
@@ -363,9 +387,9 @@ function openExpenseModal() {
         return { user_id: id, amount: amt };
       });
     } else {
-      const exactSum = MEMBERS.reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
+      const exactSum = payerOptions().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
       if (Math.abs(exactSum - amount) > 0.5) { toast('ยอดที่แบ่งไม่เท่ากับยอดรวม'); return; }
-      shareRows = MEMBERS.filter(m => Number(state.exact[m.user_id] || 0) > 0)
+      shareRows = payerOptions().filter(m => Number(state.exact[m.user_id] || 0) > 0)
         .map(m => ({ user_id: m.user_id, amount: Number(state.exact[m.user_id]) }));
     }
 

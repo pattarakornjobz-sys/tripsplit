@@ -5,15 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>สร้างทริปใหม่ — Trip Split</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#16201C">
+<meta name="theme-color" content="#EFEDE8">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TripSplit">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
+<script>initTheme();</script>
 </head>
 <body>
 <div class="phone">
@@ -83,7 +85,7 @@ function addEmail() {
 
 function renderEmails() {
   document.getElementById('emailList').innerHTML = invites.map((e, i) => `
-    <div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:13px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--ink);">
       <span>${e}</span><span data-i="${i}" class="rm" style="color:var(--red);cursor:pointer;">ลบ</span>
     </div>`).join('');
   document.querySelectorAll('.rm').forEach(el => el.addEventListener('click', () => { invites.splice(+el.dataset.i, 1); renderEmails(); }));

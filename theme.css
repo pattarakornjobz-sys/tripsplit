@@ -1,7 +1,7 @@
-/* ===== Trip Split — theme (light + dark) ===== */
-/* Loaded AFTER style.css. Light values mirror style.css defaults; the dark set
-   is applied by [data-theme="dark"] on <html>, set by initTheme() in app.js
-   before first paint. */
+/* ===== Trip Split — theme (light + dark) + app shell =====
+   Loaded AFTER style.css on every page. Light values mirror style.css;
+   the dark set is applied by [data-theme="dark"] on <html>, which
+   initTheme() (app.js) sets before first paint. */
 
 :root{
   --bg:#EFEDE8; --app:#F6F5F2; --ink:#16201C;
@@ -11,9 +11,10 @@
   --fill:#F1EFEB; --fill-strong:#E5E2DC;
   --border:rgba(22,32,28,.1); --border-strong:rgba(22,32,28,.14);
   --red:#B3452B;
+  --hero:#16201C; --hero-ink:#ffffff;
   --toast-bg:#16201C; --toast-fg:#ffffff;
-  --shadow-sheet:0 14px 30px rgba(16,24,20,.22);
   --overlay:rgba(22,32,28,.45);
+  --shadow-sheet:0 14px 30px rgba(16,24,20,.22);
   color-scheme:light;
 }
 
@@ -25,50 +26,14 @@ html[data-theme="dark"]{
   --fill:#232E29; --fill-strong:#2C3833;
   --border:rgba(255,255,255,.1); --border-strong:rgba(255,255,255,.16);
   --red:#E58A6E;
+  --hero:#232E29; --hero-ink:#EAEFEC;
   --toast-bg:#232E29; --toast-fg:#ffffff;
-  --shadow-sheet:0 14px 30px rgba(0,0,0,.5);
   --overlay:rgba(0,0,0,.62);
+  --shadow-sheet:0 14px 30px rgba(0,0,0,.5);
   color-scheme:dark;
 }
 
-/* ===== App shell: fixed bottom tab bar, only the content scrolls ===== */
-html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
-.phone{height:100dvh;min-height:0;overflow:hidden;}
-.scroll{
-  -webkit-overflow-scrolling:touch;
-  padding-bottom:calc(96px + env(safe-area-inset-bottom,0)) !important;
-}
-.tabbar{
-  position:fixed;left:50%;transform:translateX(-50%);bottom:0;
-  width:100%;max-width:460px;
-  padding:8px 8px calc(env(safe-area-inset-bottom,0) + 8px);
-  z-index:50;
-}
-/* Sheets and the install card must sit above the fixed bar */
-.modal-bg{z-index:120;}
-
-/* Pages without a tab bar keep their own bottom action strip flush */
-.phone:not(:has(.tabbar)) .scroll{padding-bottom:24px !important;}
-
-/* ===== Everything tappable behaves like a button, not like text ===== */
-.tab,.card,.btn,.subtab,.pill,.copy-btn,.icon-btn,.qr-toggle,.headbar .back,
-.row-icon,.row-label,.row-value,.acct-name,.acct-badge,.seg button,.section-label,
-.topbar h1,.topbar .eyebrow,.tab-icon,.tab-label{
-  -webkit-touch-callout:none;
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-tap-highlight-color:transparent;
-}
-.tab,.card,.btn,.subtab,.copy-btn,.icon-btn,.qr-toggle,.headbar .back,.seg button{
-  touch-action:manipulation;
-}
-.tab:active,.card:active,.qr-toggle:active{opacity:.72;}
-.copy-btn:active,.icon-btn:active,.headbar .back:active{transform:scale(.96);}
-.copy-btn,.icon-btn,.seg button,.btn{transition:transform .08s ease,background .12s ease;}
-/* Inputs stay selectable so people can still paste into them */
-input,textarea,select{-webkit-user-select:text;user-select:text;}
-
-/* Re-point the pieces style.css hard-coded to light values */
+/* ---------- Re-point everything style.css hard-coded to light ---------- */
 html,body{background:var(--bg);color:var(--ink);}
 html[data-theme="dark"] body{background:#0C100E;}
 .phone{background:var(--app);}
@@ -79,14 +44,17 @@ a{color:var(--green-text);}
 .topbar h1,.headbar .title{color:var(--ink);}
 .topbar .eyebrow{color:var(--faint);}
 .field label{color:var(--muted);}
-.field input,.field select{background:var(--input);color:var(--ink);border-color:var(--border-strong);}
-.field input::placeholder{color:var(--disabled);}
+.field input,.field select,.modal-sheet input,.modal-sheet select{
+  background:var(--input);color:var(--ink);border-color:var(--border-strong);
+}
+.field input::placeholder,.modal-sheet input::placeholder{color:var(--disabled);}
 .btn-primary{background:var(--green);color:#fff;}
 .btn-primary:disabled{background:var(--fill-strong);color:var(--faint);}
-.btn-outline,.btn-google{background:var(--card);border:1px solid var(--border-strong);color:var(--ink);}
+.btn-outline{background:var(--card);border:1px solid var(--border-strong);color:var(--ink);}
+.btn-google{background:#fff;color:#16201C;}
+html[data-theme="dark"] .btn-google{background:#EAEFEC;color:#0A100D;border-color:transparent;}
 .btn-danger{background:var(--card);border:1px solid rgba(179,69,43,.35);color:var(--red);}
 html[data-theme="dark"] .btn-danger{border-color:rgba(229,138,110,.4);}
-html[data-theme="dark"] .btn-google{background:#EAEFEC;color:#0A100D;border-color:transparent;}
 .tabbar{background:var(--card);border-top:1px solid var(--border);}
 .tab{color:var(--faint);}
 .tab-active{color:var(--green-text);background:var(--green-tint);}
@@ -95,21 +63,58 @@ html[data-theme="dark"] .btn-google{background:#EAEFEC;color:#0A100D;border-colo
 .headbar .back{background:var(--card);border-color:var(--border);color:var(--ink);}
 .pill-open{background:var(--green-tint);color:var(--green-text);}
 .pill-closed{background:var(--fill);color:var(--muted);}
+.pill-pending{background:rgba(180,98,46,.16);color:#D2925C;}
+html[data-theme="light"] .pill-pending{background:rgba(180,98,46,.12);color:#B4622E;}
 .section-label{color:var(--faint);}
 .empty{color:var(--faint);}
 .divider{background:var(--border);}
-.modal-bg{background:var(--overlay);}
+.modal-bg{background:var(--overlay);z-index:120;}
 .modal-sheet{background:var(--bg);box-shadow:var(--shadow-sheet);}
 .modal-sheet h3{color:var(--ink);}
 .center-page{color:var(--muted);}
 
-/* ===== Account page components ===== */
+/* Split-type chips inside the expense sheet (were hard-coded white) */
+.modal-sheet .subtab{
+  background:var(--input) !important;color:var(--muted);
+  border:1px solid var(--border-strong);border-radius:12px;font-weight:500;
+}
+.modal-sheet .subtab.subtab-active{
+  background:var(--green-tint) !important;color:var(--green-text);
+  border-color:rgba(31,111,92,.45);font-weight:600;box-shadow:none;
+}
 
+/* ---------- App shell: bottom tab bar locked in place ---------- */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
+.phone{height:100dvh;min-height:0;overflow:hidden;}
+.scroll{-webkit-overflow-scrolling:touch;}
+.phone:has(.tabbar) .scroll{padding-bottom:calc(100px + env(safe-area-inset-bottom,0)) !important;}
+.tabbar{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:0;
+  width:100%;max-width:460px;
+  padding:8px 8px calc(env(safe-area-inset-bottom,0) + 8px);
+  z-index:50;
+}
+
+/* ---------- Tappable things must feel like buttons, not text ---------- */
+.tab,.card,.btn,.subtab,.pill,.copy-btn,.icon-btn,.headbar .back,.seg button,.pick,
+.row-icon,.row-label,.row-value,.acct-name,.acct-badge,.section-label,.qr-drop,
+.topbar h1,.topbar .eyebrow,.tab-icon,.tab-label,.mrow{
+  -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.tab,.card,.btn,.subtab,.copy-btn,.icon-btn,.headbar .back,.seg button,.pick,.qr-drop,.mrow{
+  touch-action:manipulation;
+}
+.tab:active,.card:active,.pick:active,.qr-drop:active{opacity:.72;}
+.copy-btn:active,.icon-btn:active,.headbar .back:active{transform:scale(.96);}
+.copy-btn,.icon-btn,.seg button,.btn{transition:transform .08s ease,background .12s ease;}
+input,textarea,select{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;}
+
+/* ---------- Account page ---------- */
 .acct-hero{
   background:var(--card);border:1px solid var(--border);border-radius:20px;
   padding:20px 18px;display:flex;gap:14px;align-items:center;
 }
-.acct-hero .avatar{width:60px;height:60px;font-size:23px;}
 .acct-name{font-size:19px;font-weight:600;letter-spacing:-.01em;color:var(--ink);}
 .acct-email{margin-top:3px;font-size:11.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .acct-badge{
@@ -159,21 +164,7 @@ html[data-theme="dark"] .btn-google{background:#EAEFEC;color:#0A100D;border-colo
 }
 .seg button[aria-pressed="true"]{background:var(--raised);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.22);}
 
-.qr-toggle{
-  margin-top:10px;background:var(--card);border:1px solid var(--border);border-radius:18px;
-  padding:15px 16px;display:flex;align-items:center;gap:13px;cursor:pointer;
-}
-.qr-box{
-  margin-top:8px;background:var(--card);border:1px solid var(--border);border-radius:18px;
-  padding:18px;text-align:center;
-}
-.qr-art{border-radius:14px;background:
-  repeating-linear-gradient(45deg,var(--fill) 0 4px,var(--fill-strong) 4px 8px);
-  display:flex;align-items:center;justify-content:center;color:var(--faint);
-  font-size:10px;letter-spacing:.06em;
-}
-
-/* ===== QR upload (1:1) + preferred payment method ===== */
+/* ---------- QR upload (1:1) + preferred method ---------- */
 .qr-drop{
   position:relative;width:100%;aspect-ratio:1/1;border-radius:18px;overflow:hidden;
   background:var(--fill);border:1px dashed var(--border-strong);
@@ -188,13 +179,13 @@ html[data-theme="dark"] .btn-google{background:#EAEFEC;color:#0A100D;border-colo
   display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:500;
 }
 .qr-actions{margin-top:8px;display:flex;gap:8px;}
-.qr-actions button{flex:1;height:40px;border-radius:20px;border:1px solid var(--border-strong);
-  background:var(--card);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;}
+.qr-actions button{
+  flex:1;height:40px;border-radius:20px;border:1px solid var(--border-strong);
+  background:var(--card);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer;
+}
 .qr-actions button.danger{color:var(--red);border-color:rgba(179,69,43,.35);}
 
-.pick{
-  padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;
-}
+.pick{padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;}
 .pick + .pick{border-top:1px solid var(--border);}
 .pick-dot{
   width:22px;height:22px;flex-shrink:0;border-radius:50%;border:1.5px solid var(--border-strong);
@@ -214,13 +205,5 @@ html[data-theme="dark"] .btn-google{background:#EAEFEC;color:#0A100D;border-colo
 }
 .pay-sheet-qr{width:100%;aspect-ratio:1/1;border-radius:16px;object-fit:cover;background:var(--fill);}
 
-/* Split-type chips inside the expense sheet */
-.modal-sheet .subtab{
-  background:var(--input) !important;color:var(--muted);
-  border:1px solid var(--border-strong);border-radius:12px;padding:9px 14px;font-weight:500;
-}
-.modal-sheet .subtab.subtab-active{
-  background:var(--green-tint) !important;color:var(--green-text);
-  border-color:rgba(31,111,92,.45);font-weight:600;box-shadow:none;
-}
-.modal-sheet select,.modal-sheet input{color:var(--ink);}
+/* Pages with no tab bar (create / trip / join) keep their own bottom spacing */
+.phone:not(:has(.tabbar)) .scroll{padding-bottom:26px !important;}
