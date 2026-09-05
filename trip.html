@@ -37,7 +37,7 @@
     <button class="btn btn-primary" id="btnAddExpense" style="height:48px;border-radius:24px;">+ เพิ่มค่าใช้จ่าย</button>
   </div>
 
-  <div class="scroll" id="scroll"></div>
+  <div class="scroll" id="scroll"><div class="empty">กำลังโหลด...</div></div>
 </div>
 
 <div id="modalRoot"></div>
@@ -64,8 +64,8 @@ async function load() {
   render();
 
   sb.channel('trip-' + tripId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses', filter: 'trip_id=eq.' + tripId }, async () => { await fetchAll(); render(); })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements', filter: 'trip_id=eq.' + tripId }, async () => { await fetchAll(); render(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ts_expenses', filter: 'trip_id=eq.' + tripId }, async () => { await fetchAll(); render(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ts_settlements', filter: 'trip_id=eq.' + tripId }, async () => { await fetchAll(); render(); })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_members', filter: 'trip_id=eq.' + tripId }, async () => { await fetchAll(); render(); })
     .subscribe();
 }
@@ -85,26 +85,31 @@ async function fetchAll() {
   if (invErr) { toast('โหลดคำเชิญไม่สำเร็จ: ' + invErr.message); }
   INVITES = invites || [];
 
-  const { data: expenses, error: expErr } = await sb.from('expenses')
-    .select('*, payer:profiles!expenses_payer_id_fkey(id,display_name,avatar_url)')
+  const { data: expenses, error: expErr } = await sb.from('ts_expenses')
+    .select('*, payer:profiles!ts_expenses_payer_id_fkey(id,display_name,avatar_url)')
     .eq('trip_id', tripId).order('created_at', { ascending: false });
   if (expErr) { toast('โหลดค่าใช้จ่ายไม่สำเร็จ: ' + expErr.message); }
   EXPENSES = expenses || [];
 
   const expIds = EXPENSES.map(e => e.id);
   const { data: shares, error: shareErr } = expIds.length
-    ? await sb.from('expense_shares').select('*').in('expense_id', expIds)
+    ? await sb.from('ts_expense_shares').select('*').in('expense_id', expIds)
     : { data: [], error: null };
   if (shareErr) { toast('โหลดส่วนแบ่งไม่สำเร็จ: ' + shareErr.message); }
   SHARES = shares || [];
 
-  const { data: settlements, error: setErr } = await sb.from('settlements').select('*').eq('trip_id', tripId).eq('confirmed', true);
+  const { data: settlements, error: setErr } = await sb.from('ts_settlements').select('*').eq('trip_id', tripId).eq('confirmed', true);
   if (setErr) { toast('โหลดยอดโอนไม่สำเร็จ: ' + setErr.message); }
   SETTLEMENTS = settlements || [];
 }
 
 function render() {
-  if (!TRIP) return;
+  if (!TRIP) {
+    document.getElementById('scroll').innerHTML =
+      '<div class="empty">โหลดทริปไม่สำเร็จ<br>ลองปิดแล้วเปิดหน้านี้ใหม่อีกครั้ง<br><br>' +
+      '<span style="font-size:11px;color:var(--faint);">tripId: ' + escapeHtml(tripId || '(ไม่มี)') + '</span></div>';
+    return;
+  }
   document.getElementById('tripTitle').textContent = TRIP.name;
   document.getElementById('tripSub').textContent = fmtDateRange(TRIP.start_date, TRIP.end_date) + ' · ' + TRIP.currency;
   document.getElementById('statusPill').innerHTML = TRIP.status === 'open'
@@ -274,7 +279,7 @@ function bindTabEvents() {
   document.querySelectorAll('[data-confirm]').forEach(btn => btn.addEventListener('click', async () => {
     const tr = window.__transfers[+btn.dataset.confirm];
     btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
-    const { error } = await sb.from('settlements').insert({ trip_id: tripId, from_user: tr.from, to_user: tr.to, amount: tr.amount, confirmed: true });
+    const { error } = await sb.from('ts_settlements').insert({ trip_id: tripId, from_user: tr.from, to_user: tr.to, amount: tr.amount, confirmed: true });
     if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); btn.disabled = false; return; }
     toast('บันทึกการโอนแล้ว');
     await fetchAll(); render();
@@ -379,8 +384,8 @@ function openExpenseSheet(e) {
   if (del) del.addEventListener('click', async () => {
     if (!confirm('ลบ “' + e.title + '” ออกจากทริป? ยอดสรุปจะคำนวณใหม่ทันที')) return;
     del.disabled = true; del.textContent = 'กำลังลบ...';
-    await sb.from('expense_shares').delete().eq('expense_id', e.id);
-    const { error } = await sb.from('expenses').delete().eq('id', e.id);
+    await sb.from('ts_expense_shares').delete().eq('expense_id', e.id);
+    const { error } = await sb.from('ts_expenses').delete().eq('id', e.id);
     if (error) { toast('ลบไม่สำเร็จ: ' + error.message); del.disabled = false; del.textContent = 'ลบรายการนี้'; return; }
     toast('ลบรายการแล้ว');
     close();
@@ -530,19 +535,19 @@ function openExpenseModal(existing) {
 
     let expenseId;
     if (editing) {
-      const { error } = await sb.from('expenses').update(fields).eq('id', existing.id);
+      const { error } = await sb.from('ts_expenses').update(fields).eq('id', existing.id);
       if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); saveBtn.disabled = false; saveBtn.textContent = label; return; }
       expenseId = existing.id;
       // Shares are rewritten wholesale: the split may have changed shape entirely.
-      await sb.from('expense_shares').delete().eq('expense_id', expenseId);
+      await sb.from('ts_expense_shares').delete().eq('expense_id', expenseId);
     } else {
-      const { data: expense, error } = await sb.from('expenses')
+      const { data: expense, error } = await sb.from('ts_expenses')
         .insert(Object.assign({ trip_id: tripId, created_by: ME.id }, fields)).select().single();
       if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); saveBtn.disabled = false; saveBtn.textContent = label; return; }
       expenseId = expense.id;
     }
 
-    const { error: shareErr } = await sb.from('expense_shares')
+    const { error: shareErr } = await sb.from('ts_expense_shares')
       .insert(shareRows.map(s => ({ expense_id: expenseId, user_id: s.user_id, amount: s.amount })));
     if (shareErr) { toast('บันทึกส่วนแบ่งไม่สำเร็จ: ' + shareErr.message); }
 
