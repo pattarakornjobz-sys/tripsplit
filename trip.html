@@ -23,6 +23,7 @@
     <div class="back" id="btnBack">←</div>
     <div class="title" id="tripTitle">กำลังโหลด...</div>
     <span id="statusPill"></span>
+    <div class="back" id="btnMenu" style="margin-left:8px;">···</div>
   </div>
   <div id="tripSub" style="padding:2px 16px 0;font-size:12px;color:var(--faint);"></div>
 
@@ -56,7 +57,8 @@ async function load() {
   if (!ME || !tripId) { location.href = 'trips.html'; return; }
   document.getElementById('btnBack').addEventListener('click', () => location.href = 'trips.html');
   document.querySelectorAll('.subtab').forEach(el => el.addEventListener('click', () => { TAB = el.dataset.tab; render(); }));
-  document.getElementById('btnAddExpense').addEventListener('click', openExpenseModal);
+  document.getElementById('btnAddExpense').addEventListener('click', () => openExpenseModal());
+  document.getElementById('btnMenu').addEventListener('click', openTripMenu);
 
   await fetchAll();
   render();
@@ -83,20 +85,20 @@ async function fetchAll() {
   if (invErr) { toast('โหลดคำเชิญไม่สำเร็จ: ' + invErr.message); }
   INVITES = invites || [];
 
-  const { data: expenses, error: expErr } = await sb.from('ts_expenses')
-    .select('*, payer:profiles!ts_expenses_payer_id_fkey(id,display_name,avatar_url)')
+  const { data: expenses, error: expErr } = await sb.from('expenses')
+    .select('*, payer:profiles!expenses_payer_id_fkey(id,display_name,avatar_url)')
     .eq('trip_id', tripId).order('created_at', { ascending: false });
   if (expErr) { toast('โหลดค่าใช้จ่ายไม่สำเร็จ: ' + expErr.message); }
   EXPENSES = expenses || [];
 
   const expIds = EXPENSES.map(e => e.id);
   const { data: shares, error: shareErr } = expIds.length
-    ? await sb.from('ts_expense_shares').select('*').in('expense_id', expIds)
+    ? await sb.from('expense_shares').select('*').in('expense_id', expIds)
     : { data: [], error: null };
   if (shareErr) { toast('โหลดส่วนแบ่งไม่สำเร็จ: ' + shareErr.message); }
   SHARES = shares || [];
 
-  const { data: settlements, error: setErr } = await sb.from('ts_settlements').select('*').eq('trip_id', tripId).eq('confirmed', true);
+  const { data: settlements, error: setErr } = await sb.from('settlements').select('*').eq('trip_id', tripId).eq('confirmed', true);
   if (setErr) { toast('โหลดยอดโอนไม่สำเร็จ: ' + setErr.message); }
   SETTLEMENTS = settlements || [];
 }
@@ -172,13 +174,16 @@ function renderExpenses() {
   if (!EXPENSES.length) return '<div class="empty">ยังไม่มีรายการค่าใช้จ่าย<br>' + (TRIP.status === 'open' ? 'กดปุ่ม “+ เพิ่มค่าใช้จ่าย” ด้านบน' : '') + '</div>';
   const catName = id => (CATS.find(c => c.id === id) || { name: 'อื่นๆ' }).name;
   return EXPENSES.map(e => `
-    <div class="card card-static" style="display:flex;align-items:center;gap:12px;">
+    <div class="card" data-expense="${e.id}" style="display:flex;align-items:center;gap:12px;cursor:pointer;">
       ${avatarHtml(e.payer)}
       <div style="flex:1;min-width:0;">
         <div style="font-size:14.5px;font-weight:600;color:var(--ink);">${escapeHtml(e.title)}</div>
         <div style="font-size:12px;color:var(--faint);">${escapeHtml(e.payer ? e.payer.display_name : '')} จ่าย · ${catName(e.category)}</div>
       </div>
-      <div style="font-size:15px;font-weight:600;color:var(--ink);">${money(e.amount, TRIP.currency)}</div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:15px;font-weight:600;color:var(--ink);">${money(e.amount, TRIP.currency)}</div>
+        <div style="margin-top:2px;font-size:10.5px;color:var(--faint);">${canEdit(e) ? 'แตะเพื่อแก้ไข / ลบ' : 'แตะเพื่อดูรายละเอียด'}</div>
+      </div>
     </div>`).join('');
 }
 
@@ -226,8 +231,10 @@ function renderSummary() {
 
   window.__transfers = transfers;
 
-  const closeBtn = (TRIP.status === 'open' && TRIP.owner_id === ME.id)
-    ? '<button class="btn btn-danger" id="btnClose" style="margin-top:18px;">ปิดทริปนี้</button>'
+  const closeBtn = TRIP.owner_id === ME.id
+    ? (TRIP.status === 'open'
+      ? '<button class="btn btn-danger" id="btnClose" style="margin-top:18px;border-radius:24px;">ปิดทริปนี้</button>'
+      : '<button class="btn btn-outline" id="btnReopen" style="margin-top:18px;border-radius:24px;">เปิดทริปอีกครั้ง</button>')
     : '';
 
   return `
@@ -267,17 +274,116 @@ function bindTabEvents() {
   document.querySelectorAll('[data-confirm]').forEach(btn => btn.addEventListener('click', async () => {
     const tr = window.__transfers[+btn.dataset.confirm];
     btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
-    const { error } = await sb.from('ts_settlements').insert({ trip_id: tripId, from_user: tr.from, to_user: tr.to, amount: tr.amount, confirmed: true });
+    const { error } = await sb.from('settlements').insert({ trip_id: tripId, from_user: tr.from, to_user: tr.to, amount: tr.amount, confirmed: true });
     if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); btn.disabled = false; return; }
     toast('บันทึกการโอนแล้ว');
     await fetchAll(); render();
   }));
+  document.querySelectorAll('[data-expense]').forEach(el => el.addEventListener('click', () => {
+    const e = EXPENSES.find(x => x.id === el.dataset.expense);
+    if (e) openExpenseSheet(e);
+  }));
   const closeBtn = document.getElementById('btnClose');
-  if (closeBtn) closeBtn.addEventListener('click', async () => {
-    if (!confirm('ปิดทริปนี้? หลังปิดแล้วจะเพิ่มค่าใช้จ่ายใหม่ไม่ได้')) return;
-    const { error } = await sb.from('trips').update({ status: 'closed' }).eq('id', tripId);
-    if (error) { toast('ปิดทริปไม่สำเร็จ: ' + error.message); return; }
-    toast('ปิดทริปแล้ว');
+  if (closeBtn) closeBtn.addEventListener('click', closeTrip);
+  const reopenBtn = document.getElementById('btnReopen');
+  if (reopenBtn) reopenBtn.addEventListener('click', reopenTrip);
+}
+
+/* ---------- Trip status ---------- */
+async function setTripStatus(status) {
+  const { error } = await sb.from('trips').update({ status }).eq('id', tripId);
+  if (error) { toast((status === 'closed' ? 'ปิด' : 'เปิด') + 'ทริปไม่สำเร็จ: ' + error.message); return; }
+  toast(status === 'closed' ? 'ปิดทริปแล้ว · เพิ่มค่าใช้จ่ายไม่ได้อีก' : 'เปิดทริปอีกครั้งแล้ว');
+  await fetchAll(); render();
+}
+
+function closeTrip() {
+  if (!confirm('ปิดทริปนี้? หลังปิดแล้วจะเพิ่มหรือแก้ค่าใช้จ่ายไม่ได้')) return;
+  setTripStatus('closed');
+}
+
+function reopenTrip() { setTripStatus('open'); }
+
+/* ---------- Trip menu (···) ---------- */
+function openTripMenu() {
+  const isOwner = TRIP.owner_id === ME.id;
+  const root = document.getElementById('modalRoot');
+  const statusRow = !isOwner ? '' : (TRIP.status === 'open'
+    ? '<button class="btn btn-danger" id="tmClose" style="margin-top:8px;border-radius:24px;">ปิดทริปนี้</button>'
+    : '<button class="btn btn-primary" id="tmReopen" style="margin-top:8px;border-radius:24px;">เปิดทริปอีกครั้ง</button>');
+
+  root.innerHTML = `
+    <div class="modal-bg" id="tmBg">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <h3>จัดการทริป</h3>
+        <div style="font-size:12.5px;line-height:1.6;color:var(--muted);">${escapeHtml(TRIP.name)} · ${TRIP.status === 'open' ? 'เปิดอยู่' : 'ปิดแล้ว'}</div>
+        <button class="btn btn-outline" id="tmMembers" style="margin-top:14px;border-radius:24px;">ผู้ร่วมทริปและคำเชิญ</button>
+        ${statusRow}
+        ${isOwner ? '<div style="margin-top:10px;font-size:11.5px;line-height:1.55;color:var(--faint);">' + (TRIP.status === 'open' ? 'ปิดทริปแล้วจะไม่มีใครเพิ่มหรือแก้ค่าใช้จ่ายได้ ยอดสรุปจะถูกล็อกไว้' : 'เปิดใหม่แล้วสมาชิกบันทึกค่าใช้จ่ายต่อได้') + '</div>' : '<div style="margin-top:10px;font-size:11.5px;color:var(--faint);">เฉพาะเจ้าของทริปเท่านั้นที่ปิดหรือเปิดทริปได้</div>'}
+        <button class="btn btn-outline" id="tmCancel" style="margin-top:14px;border-radius:24px;">ปิดหน้าต่าง</button>
+      </div>
+    </div>`;
+
+  const close = () => { root.innerHTML = ''; };
+  document.getElementById('tmBg').addEventListener('click', close);
+  document.getElementById('tmCancel').addEventListener('click', close);
+  document.getElementById('tmMembers').addEventListener('click', () => { close(); TAB = 'members'; render(); });
+  const c = document.getElementById('tmClose');
+  if (c) c.addEventListener('click', () => { close(); closeTrip(); });
+  const r = document.getElementById('tmReopen');
+  if (r) r.addEventListener('click', () => { close(); reopenTrip(); });
+}
+
+/* ---------- Expense detail / edit / delete ---------- */
+// The creator of a row and the trip owner may change it, while the trip is open.
+function canEdit(e) {
+  return TRIP.status === 'open' && (e.created_by === ME.id || e.payer_id === ME.id || TRIP.owner_id === ME.id);
+}
+
+function openExpenseSheet(e) {
+  const root = document.getElementById('modalRoot');
+  const catName = (CATS.find(c => c.id === e.category) || { name: 'อื่นๆ' }).name;
+  const rows = SHARES.filter(s => s.expense_id === e.id).map(s => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);">
+      ${avatarHtml(P(s.user_id), 28)}
+      <div style="flex:1;font-size:13px;color:var(--ink);">${escapeHtml(P(s.user_id).nickname || P(s.user_id).display_name)}${s.user_id === ME.id ? ' (คุณ)' : ''}</div>
+      <div style="font-size:13px;font-weight:600;color:var(--ink);">${money(s.amount, TRIP.currency)}</div>
+    </div>`).join('');
+
+  const actions = canEdit(e)
+    ? '<button class="btn btn-primary" id="exEdit" style="margin-top:16px;border-radius:24px;">แก้ไขรายการ</button>'
+      + '<button class="btn btn-danger" id="exDelete" style="margin-top:8px;border-radius:24px;">ลบรายการนี้</button>'
+    : '<div style="margin-top:16px;font-size:11.5px;line-height:1.55;color:var(--faint);">' + (TRIP.status === 'open' ? 'แก้ได้เฉพาะคนที่บันทึกรายการนี้ คนจ่าย หรือเจ้าของทริป' : 'ทริปปิดแล้ว แก้ไขรายการไม่ได้') + '</div>';
+
+  root.innerHTML = `
+    <div class="modal-bg" id="exBg">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <h3>${escapeHtml(e.title)}</h3>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;">
+          <div style="font-size:12.5px;color:var(--muted);">${escapeHtml(e.payer ? e.payer.display_name : '')} จ่าย · ${catName}</div>
+          <div style="font-size:24px;font-weight:600;color:var(--ink);white-space:nowrap;">${money(e.amount, TRIP.currency)}</div>
+        </div>
+        <div class="section-label" style="margin-top:14px;">ส่วนแบ่งของแต่ละคน</div>
+        ${rows || '<div class="empty">ไม่มีข้อมูลส่วนแบ่ง</div>'}
+        ${actions}
+        <button class="btn btn-outline" id="exCancel" style="margin-top:8px;border-radius:24px;">ปิด</button>
+      </div>
+    </div>`;
+
+  const close = () => { root.innerHTML = ''; };
+  document.getElementById('exBg').addEventListener('click', close);
+  document.getElementById('exCancel').addEventListener('click', close);
+  const ed = document.getElementById('exEdit');
+  if (ed) ed.addEventListener('click', () => { close(); openExpenseModal(e); });
+  const del = document.getElementById('exDelete');
+  if (del) del.addEventListener('click', async () => {
+    if (!confirm('ลบ “' + e.title + '” ออกจากทริป? ยอดสรุปจะคำนวณใหม่ทันที')) return;
+    del.disabled = true; del.textContent = 'กำลังลบ...';
+    await sb.from('expense_shares').delete().eq('expense_id', e.id);
+    const { error } = await sb.from('expenses').delete().eq('id', e.id);
+    if (error) { toast('ลบไม่สำเร็จ: ' + error.message); del.disabled = false; del.textContent = 'ลบรายการนี้'; return; }
+    toast('ลบรายการแล้ว');
+    close();
     await fetchAll(); render();
   });
 }
@@ -293,20 +399,40 @@ function payerOptions() {
   return list;
 }
 
-function openExpenseModal() {
-  const state = { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
+// Pass an expense row to edit it; call with no argument to add a new one.
+function openExpenseModal(existing) {
+  const editing = !!existing;
+  const own = editing ? SHARES.filter(s => s.expense_id === existing.id) : [];
+  const state = editing
+    ? {
+        title: existing.title, amount: String(existing.amount), category: existing.category || 'other',
+        payer: existing.payer_id, splitType: existing.split_type || 'equal',
+        involved: own.map(s => s.user_id),
+        exact: own.reduce((acc, s) => { acc[s.user_id] = String(s.amount); return acc; }, {}),
+      }
+    : { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
   const root = document.getElementById('modalRoot');
+
+  // While editing, someone who has a share but has since left the trip must
+  // still show up so their amount is not silently dropped.
+  function splitCandidates() {
+    const list = payerOptions();
+    Object.keys(state.exact).concat(state.involved).forEach(id => {
+      if (!list.some(m => m.user_id === id)) list.push({ user_id: id, profile: P(id) });
+    });
+    return list;
+  }
 
   function renderModal() {
     const involvedCount = state.involved.length || 1;
     const perHead = Number(state.amount || 0) / involvedCount;
-    const exactSum = payerOptions().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
+    const exactSum = splitCandidates().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
     const remain = Number(state.amount || 0) - exactSum;
 
     root.innerHTML = `
     <div class="modal-bg" id="modalBg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
-        <h3>เพิ่มค่าใช้จ่าย</h3>
+        <h3>${editing ? 'แก้ไขค่าใช้จ่าย' : 'เพิ่มค่าใช้จ่าย'}</h3>
         <div class="field"><label>ชื่อรายการ</label><input id="mTitle" type="text" placeholder="เช่น ค่าอาหารเย็น" value="${escapeAttr(state.title)}"></div>
         <div class="field"><label>จำนวนเงิน (${TRIP.currency})</label><input id="mAmount" type="number" inputmode="decimal" placeholder="0" value="${escapeAttr(state.amount)}"></div>
         <div class="field">
@@ -325,7 +451,7 @@ function openExpenseModal() {
           </div>
         </div>
         <div id="splitRows">
-          ${payerOptions().map(m => {
+          ${splitCandidates().map(m => {
             const on = state.involved.includes(m.user_id);
             if (state.splitType === 'equal') {
               return `<div class="mrow" data-id="${m.user_id}" style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;">
@@ -342,8 +468,8 @@ function openExpenseModal() {
           }).join('')}
         </div>
         ${state.splitType === 'exact' ? `<div style="margin-top:6px;font-size:12px;color:${Math.abs(remain) < 0.01 ? 'var(--green)' : 'var(--red)'};">${Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency))}</div>` : ''}
-        <button class="btn btn-primary" id="mSave" style="margin-top:18px;">บันทึกรายการ</button>
-        <button class="btn btn-outline" id="mCancel" style="margin-top:8px;">ยกเลิก</button>
+        <button class="btn btn-primary" id="mSave" style="margin-top:18px;border-radius:24px;">${editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}</button>
+        <button class="btn btn-outline" id="mCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
       </div>
     </div>`;
 
@@ -387,26 +513,40 @@ function openExpenseModal() {
         return { user_id: id, amount: amt };
       });
     } else {
-      const exactSum = payerOptions().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
+      const exactSum = splitCandidates().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
       if (Math.abs(exactSum - amount) > 0.5) { toast('ยอดที่แบ่งไม่เท่ากับยอดรวม'); return; }
-      shareRows = payerOptions().filter(m => Number(state.exact[m.user_id] || 0) > 0)
+      shareRows = splitCandidates().filter(m => Number(state.exact[m.user_id] || 0) > 0)
         .map(m => ({ user_id: m.user_id, amount: Number(state.exact[m.user_id]) }));
     }
 
     const saveBtn = document.getElementById('mSave');
+    const label = editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ';
     saveBtn.disabled = true; saveBtn.textContent = 'กำลังบันทึก...';
 
-    const { data: expense, error } = await sb.from('ts_expenses').insert({
-      trip_id: tripId, payer_id: state.payer, title: state.title.trim(), amount,
-      category: state.category, split_type: state.splitType, created_by: ME.id,
-    }).select().single();
+    const fields = {
+      payer_id: state.payer, title: state.title.trim(), amount,
+      category: state.category, split_type: state.splitType,
+    };
 
-    if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); saveBtn.disabled = false; saveBtn.textContent = 'บันทึกรายการ'; return; }
+    let expenseId;
+    if (editing) {
+      const { error } = await sb.from('expenses').update(fields).eq('id', existing.id);
+      if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); saveBtn.disabled = false; saveBtn.textContent = label; return; }
+      expenseId = existing.id;
+      // Shares are rewritten wholesale: the split may have changed shape entirely.
+      await sb.from('expense_shares').delete().eq('expense_id', expenseId);
+    } else {
+      const { data: expense, error } = await sb.from('expenses')
+        .insert(Object.assign({ trip_id: tripId, created_by: ME.id }, fields)).select().single();
+      if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); saveBtn.disabled = false; saveBtn.textContent = label; return; }
+      expenseId = expense.id;
+    }
 
-    const { error: shareErr } = await sb.from('ts_expense_shares').insert(shareRows.map(s => ({ expense_id: expense.id, user_id: s.user_id, amount: s.amount })));
+    const { error: shareErr } = await sb.from('expense_shares')
+      .insert(shareRows.map(s => ({ expense_id: expenseId, user_id: s.user_id, amount: s.amount })));
     if (shareErr) { toast('บันทึกส่วนแบ่งไม่สำเร็จ: ' + shareErr.message); }
 
-    toast('เพิ่มรายการแล้ว');
+    toast(editing ? 'แก้ไขรายการแล้ว' : 'เพิ่มรายการแล้ว');
     close();
     await fetchAll(); render();
   }
