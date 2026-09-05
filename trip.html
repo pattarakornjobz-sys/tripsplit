@@ -409,6 +409,7 @@ function payerOptions() {
 /* ---------- Add several expenses at once (equal-split only) ---------- */
 function openMultiExpenseModal() {
   const root = document.getElementById('modalRoot');
+  let debounceTimer = null;
   const state = {
     payer: ME.id,
     involved: payerOptions().map(m => m.user_id),
@@ -474,10 +475,12 @@ function openMultiExpenseModal() {
     document.getElementById('mmBg').addEventListener('click', close);
     document.getElementById('mmCancel').addEventListener('click', close);
     root.querySelectorAll('[data-row]').forEach(inp => {
-      const evt = inp.tagName === 'SELECT' ? 'change' : 'input';
-      inp.addEventListener(evt, e => {
+      const isSelect = inp.tagName === 'SELECT';
+      inp.addEventListener(isSelect ? 'change' : 'input', e => {
         state.rows[+e.target.dataset.row][e.target.dataset.field] = e.target.value;
-        renderModal();
+        if (isSelect) { renderModal(); return; }
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(renderModal, 400);
       });
     });
     root.querySelectorAll('[data-remove]').forEach(el => el.addEventListener('click', () => {
@@ -564,6 +567,7 @@ function openExpenseModal(existing) {
       }
     : { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
   const root = document.getElementById('modalRoot');
+  let debounceTimer = null;
 
   // While editing, someone who has a share but has since left the trip must
   // still show up so their amount is not silently dropped.
@@ -638,7 +642,11 @@ function openExpenseModal(existing) {
     document.getElementById('modalBg').addEventListener('click', close);
     document.getElementById('mCancel').addEventListener('click', close);
     document.getElementById('mTitle').addEventListener('input', e => state.title = e.target.value);
-    document.getElementById('mAmount').addEventListener('input', e => { state.amount = e.target.value; renderModal(); });
+    document.getElementById('mAmount').addEventListener('input', e => {
+      state.amount = e.target.value;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(renderModal, 400);
+    });
     document.getElementById('mCat').addEventListener('change', e => state.category = e.target.value);
     document.getElementById('mPayer').addEventListener('change', e => state.payer = e.target.value);
     document.getElementById('mEqual').addEventListener('click', () => { state.splitType = 'equal'; renderModal(); });
@@ -650,7 +658,8 @@ function openExpenseModal(existing) {
     }));
     root.querySelectorAll('[data-exact]').forEach(inp => inp.addEventListener('input', e => {
       state.exact[e.target.dataset.exact] = e.target.value;
-      renderModal();
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(renderModal, 400);
     }));
     document.getElementById('mSave').addEventListener('click', saveExpense);
 
