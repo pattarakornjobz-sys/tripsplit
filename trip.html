@@ -409,7 +409,6 @@ function payerOptions() {
 /* ---------- Add several expenses at once (equal-split only) ---------- */
 function openMultiExpenseModal() {
   const root = document.getElementById('modalRoot');
-  let debounceTimer = null;
   const state = {
     payer: ME.id,
     involved: payerOptions().map(m => m.user_id),
@@ -464,8 +463,8 @@ function openMultiExpenseModal() {
         </div>
 
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin:6px 0 4px;">
-          <span>${validRows.length} รายการที่กรอกครบ</span>
-          <span style="font-weight:600;color:var(--ink);">${money(total, TRIP.currency)}</span>
+          <span id="mmValidCount">${validRows.length} รายการที่กรอกครบ</span>
+          <span id="mmTotalAmount" style="font-weight:600;color:var(--ink);">${money(total, TRIP.currency)}</span>
         </div>
         <button class="btn btn-primary" id="mmSave" style="margin-top:10px;border-radius:24px;" ${validRows.length ? '' : 'disabled'}>บันทึกทั้งหมด (${validRows.length} รายการ)</button>
         <button class="btn btn-outline" id="mmCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
@@ -474,13 +473,22 @@ function openMultiExpenseModal() {
 
     document.getElementById('mmBg').addEventListener('click', close);
     document.getElementById('mmCancel').addEventListener('click', close);
+    function updateMmSummary() {
+      const validRows = state.rows.filter(r => r.title.trim() && Number(r.amount) > 0);
+      const total = validRows.reduce((a, r) => a + Number(r.amount), 0);
+      const countEl = document.getElementById('mmValidCount');
+      const totalEl = document.getElementById('mmTotalAmount');
+      const saveBtn = document.getElementById('mmSave');
+      if (countEl) countEl.textContent = validRows.length + ' รายการที่กรอกครบ';
+      if (totalEl) totalEl.textContent = money(total, TRIP.currency);
+      if (saveBtn) { saveBtn.disabled = !validRows.length; saveBtn.textContent = 'บันทึกทั้งหมด (' + validRows.length + ' รายการ)'; }
+    }
+
     root.querySelectorAll('[data-row]').forEach(inp => {
       const isSelect = inp.tagName === 'SELECT';
       inp.addEventListener(isSelect ? 'change' : 'input', e => {
         state.rows[+e.target.dataset.row][e.target.dataset.field] = e.target.value;
-        if (isSelect) { renderModal(); return; }
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(renderModal, 400);
+        updateMmSummary();
       });
     });
     root.querySelectorAll('[data-remove]').forEach(el => el.addEventListener('click', () => {
@@ -567,7 +575,6 @@ function openExpenseModal(existing) {
       }
     : { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
   const root = document.getElementById('modalRoot');
-  let debounceTimer = null;
 
   // While editing, someone who has a share but has since left the trip must
   // still show up so their amount is not silently dropped.
@@ -623,7 +630,7 @@ function openExpenseModal(existing) {
               return `<div class="mrow" data-id="${m.user_id}" style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;">
                 <div style="width:20px;height:20px;border-radius:6px;border:1.5px solid ${on ? 'var(--green)' : 'var(--border)'};background:${on ? 'var(--green)' : 'transparent'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;">${on ? '✓' : ''}</div>
                 <div style="flex:1;font-size:13.5px;color:${on ? 'var(--ink)' : 'var(--faint)'};">${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</div>
-                <div style="font-size:13px;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on ? money(perHead, TRIP.currency) : '—'}</div>
+                <div class="perhead-amt" data-uid="${m.user_id}" style="font-size:13px;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on ? money(perHead, TRIP.currency) : '—'}</div>
               </div>`;
             } else {
               return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
@@ -633,7 +640,7 @@ function openExpenseModal(existing) {
             }
           }).join('')}
         </div>
-        ${state.splitType === 'exact' ? `<div style="margin-top:6px;font-size:12px;color:${Math.abs(remain) < 0.01 ? 'var(--green)' : 'var(--red)'};">${Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency))}</div>` : ''}
+        ${state.splitType === 'exact' ? `<div id="mRemainText" style="margin-top:6px;font-size:12px;color:${Math.abs(remain) < 0.01 ? 'var(--green)' : 'var(--red)'};">${Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency))}</div>` : ''}
         <button class="btn btn-primary" id="mSave" style="margin-top:18px;border-radius:24px;">${editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}</button>
         <button class="btn btn-outline" id="mCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
       </div>
@@ -644,8 +651,7 @@ function openExpenseModal(existing) {
     document.getElementById('mTitle').addEventListener('input', e => state.title = e.target.value);
     document.getElementById('mAmount').addEventListener('input', e => {
       state.amount = e.target.value;
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(renderModal, 400);
+      updateLivePreview();
     });
     document.getElementById('mCat').addEventListener('change', e => state.category = e.target.value);
     document.getElementById('mPayer').addEventListener('change', e => state.payer = e.target.value);
@@ -658,10 +664,29 @@ function openExpenseModal(existing) {
     }));
     root.querySelectorAll('[data-exact]').forEach(inp => inp.addEventListener('input', e => {
       state.exact[e.target.dataset.exact] = e.target.value;
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(renderModal, 400);
+      updateLivePreview();
     }));
     document.getElementById('mSave').addEventListener('click', saveExpense);
+
+    // Updates the per-head preview / remaining-amount text directly via the
+    // DOM — no re-render, so the input the person is typing in is never
+    // touched and typing never gets interrupted.
+    function updateLivePreview() {
+      const involvedCount = state.involved.length || 1;
+      const perHead = Number(state.amount || 0) / involvedCount;
+      root.querySelectorAll('.perhead-amt').forEach(el => {
+        const on = state.involved.includes(el.dataset.uid);
+        el.textContent = on ? money(perHead, TRIP.currency) : '—';
+      });
+      const remainEl = document.getElementById('mRemainText');
+      if (remainEl) {
+        const exactSum = splitCandidates().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
+        const remain = Number(state.amount || 0) - exactSum;
+        const ok = Math.abs(remain) < 0.01;
+        remainEl.style.color = ok ? 'var(--green)' : 'var(--red)';
+        remainEl.textContent = ok ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency));
+      }
+    }
 
     if (activeSelector) {
       const toFocus = root.querySelector(activeSelector);
