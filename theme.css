@@ -85,7 +85,7 @@ html[data-theme="light"] .pill-pending{background:rgba(180,98,46,.12);color:#B46
 
 /* ---------- App shell: bottom tab bar locked in place ---------- */
 html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
-.phone{height:100dvh;min-height:0;overflow:hidden;}
+.phone{height:var(--app-vh, 100dvh);min-height:0;overflow:hidden;}
 .scroll{-webkit-overflow-scrolling:touch;}
 .phone:has(.tabbar) .scroll{padding-bottom:calc(100px + env(safe-area-inset-bottom,0)) !important;}
 .tabbar{

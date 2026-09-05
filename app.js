@@ -463,3 +463,19 @@ async function uploadQrImage(userId, file) {
 async function removeQrImage(userId) {
   await sb.storage.from('qr').remove([userId + '.jpg']);
 }
+
+/* ---------- Real viewport height (fixes mobile browser toolbar scroll bugs) ----------
+   100dvh is unreliable on Android/iOS while the browser's URL bar shows/hides —
+   it can leave the last bit of scrollable content unreachable. We measure the
+   actual visible height in JS and expose it as --app-vh for theme.css to use. */
+(function () {
+  function setAppVh() {
+    document.documentElement.style.setProperty('--app-vh', window.innerHeight + 'px');
+  }
+  setAppVh();
+  window.addEventListener('resize', setAppVh);
+  window.addEventListener('orientationchange', () => setTimeout(setAppVh, 100));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', setAppVh);
+  }
+})();
