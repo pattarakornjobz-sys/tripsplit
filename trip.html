@@ -12,10 +12,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TripSplit">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
-<script>initTheme();</script>
 </head>
 <body>
 <div class="phone">
@@ -32,11 +30,11 @@
     <div class="subtab" data-tab="summary">สรุป</div>
   </div>
 
-  <div id="fab" style="padding:10px 16px 4px;display:none;">
-    <button class="btn btn-primary" id="btnAddExpense" style="border-radius:25px;">+ เพิ่มค่าใช้จ่าย</button>
-  </div>
-
   <div class="scroll" id="scroll"></div>
+
+  <div id="fab" style="position:sticky;bottom:0;padding:12px 16px calc(env(safe-area-inset-bottom,0) + 12px);background:linear-gradient(180deg,rgba(239,237,232,0),var(--bg) 30%);display:none;">
+    <button class="btn btn-primary" id="btnAddExpense">+ เพิ่มค่าใช้จ่าย</button>
+  </div>
 </div>
 
 <div id="modalRoot"></div>
@@ -69,18 +67,35 @@ async function load() {
 }
 
 async function fetchAll() {
-  const { data: trip } = await sb.from('trips').select('*').eq('id', tripId).single();
+  const { data: trip, error: tripErr } = await sb.from('trips').select('*').eq('id', tripId).single();
+  if (tripErr) { toast('โหลดทริปไม่สำเร็จ: ' + tripErr.message); }
   TRIP = trip;
-  const { data: members } = await sb.from('trip_members').select('user_id, role, profile:profiles(id,display_name,avatar_url,email,nickname,phone,bank_code,bank_account,account_holder,qr_url,pay_method)').eq('trip_id', tripId);
+
+  const { data: members, error: memErr } = await sb.from('trip_members')
+    .select('user_id, role, profile:profiles!trip_members_user_id_profiles_fkey(id,display_name,avatar_url,email)')
+    .eq('trip_id', tripId);
+  if (memErr) { toast('โหลดสมาชิกไม่สำเร็จ: ' + memErr.message); }
   MEMBERS = members || [];
-  const { data: invites } = await sb.from('trip_invites').select('*').eq('trip_id', tripId).eq('status', 'pending');
+
+  const { data: invites, error: invErr } = await sb.from('trip_invites').select('*').eq('trip_id', tripId).eq('status', 'pending');
+  if (invErr) { toast('โหลดคำเชิญไม่สำเร็จ: ' + invErr.message); }
   INVITES = invites || [];
-  const { data: expenses } = await sb.from('expenses').select('*, payer:profiles!expenses_payer_id_fkey(id,display_name,avatar_url)').eq('trip_id', tripId).order('created_at', { ascending: false });
+
+  const { data: expenses, error: expErr } = await sb.from('expenses')
+    .select('*, payer:profiles!expenses_payer_id_fkey(id,display_name,avatar_url)')
+    .eq('trip_id', tripId).order('created_at', { ascending: false });
+  if (expErr) { toast('โหลดค่าใช้จ่ายไม่สำเร็จ: ' + expErr.message); }
   EXPENSES = expenses || [];
+
   const expIds = EXPENSES.map(e => e.id);
-  const { data: shares } = expIds.length ? await sb.from('expense_shares').select('*').in('expense_id', expIds) : { data: [] };
+  const { data: shares, error: shareErr } = expIds.length
+    ? await sb.from('expense_shares').select('*').in('expense_id', expIds)
+    : { data: [], error: null };
+  if (shareErr) { toast('โหลดส่วนแบ่งไม่สำเร็จ: ' + shareErr.message); }
   SHARES = shares || [];
-  const { data: settlements } = await sb.from('settlements').select('*').eq('trip_id', tripId).eq('confirmed', true);
+
+  const { data: settlements, error: setErr } = await sb.from('settlements').select('*').eq('trip_id', tripId).eq('confirmed', true);
+  if (setErr) { toast('โหลดยอดโอนไม่สำเร็จ: ' + setErr.message); }
   SETTLEMENTS = settlements || [];
 }
 
@@ -189,28 +204,15 @@ function renderSummary() {
     </div>`;
   }).join('');
 
-  const transferRows = transfers.length ? transfers.map((tr, i) => {
-    const payee = P(tr.to);
-    const payeeName = payee.nickname || payee.display_name;
-    const fromName = P(tr.from).nickname || P(tr.from).display_name;
-    return `
+  const transferRows = transfers.length ? transfers.map((tr, i) => `
     <div class="card card-static">
       <div style="display:flex;align-items:center;gap:10px;">
         ${avatarHtml(P(tr.from), 30)}
-        <div style="font-size:13px;color:var(--ink);flex:1;">${escapeHtml(fromName)} → ${escapeHtml(payeeName)}</div>
+        <div style="font-size:13px;color:var(--ink);flex:1;">${escapeHtml(P(tr.from).display_name)} → ${escapeHtml(P(tr.to).display_name)}</div>
         <div style="font-size:14.5px;font-weight:600;color:var(--ink);">${money(tr.amount, TRIP.currency)}</div>
       </div>
-      <div data-payee="${i}" style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:13px;background:var(--fill);cursor:pointer;">
-        <div class="row-icon" style="width:32px;height:32px;border-radius:11px;font-size:13px;">${payMethodOf(payee) ? PAY_METHODS[payMethodOf(payee)].icon : '?'}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:12.5px;font-weight:600;color:var(--ink);">${escapeHtml(payeeName)} ${payMethodSummary(payee)}</div>
-          <div style="margin-top:2px;font-size:11px;color:var(--faint);">แตะเพื่อดูเลข / QR แล้วคัดลอกไปโอน</div>
-        </div>
-        <div style="color:var(--faint);font-size:15px;">›</div>
-      </div>
-      ${tr.from === ME.id ? `<button class="btn btn-primary" data-confirm="${i}" style="height:38px;margin-top:10px;font-size:13px;">ยืนยันว่าโอนแล้ว</button>` : `<div style="margin-top:8px;font-size:11.5px;color:var(--faint);">รอ ${escapeHtml(fromName)} โอน</div>`}
-    </div>`;
-  }).join('') : '<div class="empty">ยอดลงตัวแล้ว ไม่มีใครติดใคร 🎉</div>';
+      ${tr.from === ME.id ? `<button class="btn btn-primary" data-confirm="${i}" style="height:38px;margin-top:10px;font-size:13px;">ยืนยันว่าโอนแล้ว</button>` : `<div style="margin-top:8px;font-size:11.5px;color:var(--faint);">รอ ${escapeHtml(P(tr.from).display_name)} โอน</div>`}
+    </div>`).join('') : '<div class="empty">ยอดลงตัวแล้ว ไม่มีใครติดใคร 🎉</div>';
 
   window.__transfers = transfers;
 
@@ -248,10 +250,6 @@ function bindTabEvents() {
     toast('เพิ่มคำเชิญแล้ว');
     await fetchAll(); render();
   });
-  document.querySelectorAll('[data-payee]').forEach(el => el.addEventListener('click', () => {
-    const tr = window.__transfers[+el.dataset.payee];
-    openPayeeSheet(P(tr.to), tr.amount, TRIP.currency);
-  }));
   document.querySelectorAll('[data-confirm]').forEach(btn => btn.addEventListener('click', async () => {
     const tr = window.__transfers[+btn.dataset.confirm];
     btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
@@ -271,18 +269,8 @@ function bindTabEvents() {
 }
 
 /* ---------- Add expense modal ---------- */
-// A brand-new trip has no other members yet, so always offer yourself as payer.
-// Leaving it unset would mean "no payer" rather than "me".
-function payerOptions() {
-  const list = MEMBERS.slice();
-  if (!list.some(m => m.user_id === ME.id)) {
-    list.unshift({ user_id: ME.id, profile: { display_name: 'คุณ' } });
-  }
-  return list;
-}
-
 function openExpenseModal() {
-  const state = { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
+  const state = { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: MEMBERS.map(m => m.user_id), exact: {} };
   const root = document.getElementById('modalRoot');
 
   function renderModal() {
@@ -303,17 +291,17 @@ function openExpenseModal() {
         </div>
         <div class="field">
           <label>ใครจ่าย</label>
-          <select id="mPayer">${payerOptions().map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}</select>
+          <select id="mPayer">${MEMBERS.map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}</select>
         </div>
         <div class="field">
           <label>วิธีหาร</label>
           <div style="display:flex;gap:6px;">
-            <div class="subtab ${state.splitType === 'equal' ? 'subtab-active' : ''}" id="mEqual">หารเท่ากัน</div>
-            <div class="subtab ${state.splitType === 'exact' ? 'subtab-active' : ''}" id="mExact">ระบุเอง</div>
+            <div class="subtab ${state.splitType === 'equal' ? 'subtab-active' : ''}" id="mEqual" style="background:#fff;">หารเท่ากัน</div>
+            <div class="subtab ${state.splitType === 'exact' ? 'subtab-active' : ''}" id="mExact" style="background:#fff;">ระบุเอง</div>
           </div>
         </div>
         <div id="splitRows">
-          ${payerOptions().map(m => {
+          ${MEMBERS.map(m => {
             const on = state.involved.includes(m.user_id);
             if (state.splitType === 'equal') {
               return `<div class="mrow" data-id="${m.user_id}" style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;">
