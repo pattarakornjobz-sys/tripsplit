@@ -508,63 +508,112 @@ function canEditContrib(c) {
 }
 
 /* ---------- Contribution add / edit / delete ---------- */
+// Collecting for the pot is normally "everyone chips in the same amount", so the
+// sheet takes a per-person amount plus a tick list, and writes one row each.
 function openContribModal(existing) {
   const editing = !!existing;
   const state = editing
-    ? { user: existing.user_id, amount: String(existing.amount), note: existing.note || "" }
-    : { user: ME.id, amount: "", note: "" };
-  const root = document.getElementById("modalRoot");
+    ? { per: String(existing.amount), who: [existing.user_id], note: existing.note || '' }
+    : { per: '', who: payerOptions().map(m => m.user_id), note: '' };
+  const root = document.getElementById('modalRoot');
+
+  function people() { return editing ? payerOptions().filter(m => m.user_id === existing.user_id) : payerOptions(); }
+  function total() { return (Number(state.per) || 0) * state.who.length; }
 
   function renderModal() {
+    const rows = people().map(m => {
+      const on = state.who.includes(m.user_id);
+      return `
+      <div class="mrow" data-who="${m.user_id}" style="display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--border);cursor:pointer;">
+        <div style="width:22px;height:22px;flex-shrink:0;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;background:${on ? 'var(--green)' : 'transparent'};border:1.5px solid ${on ? 'var(--green)' : 'var(--border-strong)'};">${on ? '✓' : ''}</div>
+        ${avatarHtml(m.profile, 30)}
+        <div style="flex:1;min-width:0;font-size:14px;color:${on ? 'var(--ink)' : 'var(--faint)'};">${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</div>
+        <div style="font-size:13.5px;font-weight:600;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on && Number(state.per) > 0 ? money(Number(state.per), TRIP.currency) : '—'}</div>
+      </div>`;
+    }).join('');
+
     root.innerHTML = `
     <div class="modal-bg" id="cbBg">
       <div class="modal-sheet" onclick="event.stopPropagation()">
-        <h3>${editing ? "แก้ไขเงินกองกลาง" : "เก็บเงินเข้ากองกลาง"}</h3>
-        <div style="font-size:12.5px;line-height:1.6;color:var(--muted);">บันทึกว่าใครลงเงินเข้ากองกลางเท่าไร — ยอดนี้จะถูกนับเป็นเงินที่เจ้าตัวจ่ายไปแล้ว</div>
+        <h3>${editing ? 'แก้ไขเงินกองกลาง' : 'เก็บเงินเข้ากองกลาง'}</h3>
+        <div style="font-size:12.5px;line-height:1.6;color:var(--muted);">${editing ? 'แก้ยอดที่คนนี้ลงกองกลาง' : 'ใส่ยอดต่อคน แล้วติ๊กว่าเก็บจากใครบ้าง — ระบบบันทึกแยกเป็นรายคนให้'}</div>
+
         <div class="field">
-          <label>ใครลงเงิน</label>
-          <select id="cbUser">${payerOptions().map(m => `<option value="${m.user_id}" ${m.user_id === state.user ? "selected" : ""}>${escapeHtml(m.user_id === ME.id ? "คุณ" : (m.profile ? m.profile.display_name : ""))}</option>`).join("")}</select>
+          <label>${editing ? 'จำนวนเงิน' : 'คนละเท่าไร'} (${TRIP.currency})</label>
+          <input id="cbPer" type="number" inputmode="decimal" placeholder="0" value="${escapeAttr(state.per)}">
         </div>
-        <div class="field"><label>จำนวนเงิน (${TRIP.currency})</label><input id="cbAmount" type="number" inputmode="decimal" placeholder="0" value="${escapeAttr(state.amount)}"></div>
+
+        <div class="field">
+          <label style="display:flex;align-items:center;justify-content:space-between;">
+            <span>${editing ? 'ผู้ลงเงิน' : 'เก็บจากใครบ้าง'}</span>
+            ${editing ? '' : `<span id="cbAll" style="font-size:12px;font-weight:600;color:var(--green-text);cursor:pointer;">${state.who.length === people().length ? 'ไม่เลือกทั้งหมด' : 'เลือกทั้งหมด'}</span>`}
+          </label>
+          <div>${rows}</div>
+        </div>
+
+        <div style="display:flex;align-items:baseline;justify-content:space-between;padding:12px 14px;border-radius:14px;background:var(--fill);">
+          <div style="font-size:12.5px;color:var(--muted);">รวมเก็บครั้งนี้ · ${state.who.length} คน</div>
+          <div style="font-size:18px;font-weight:600;color:var(--ink);">${money(total(), TRIP.currency)}</div>
+        </div>
+
         <div class="field"><label>หมายเหตุ (ไม่ใส่ก็ได้)</label><input id="cbNote" type="text" placeholder="เช่น เก็บรอบแรกก่อนออกเดินทาง" value="${escapeAttr(state.note)}"></div>
-        <button class="btn btn-primary" id="cbSave" style="margin-top:18px;border-radius:24px;">${editing ? "บันทึกการแก้ไข" : "บันทึกเงินกองกลาง"}</button>
-        ${editing && canEditContrib(existing) ? '<button class="btn btn-danger" id="cbDelete" style="margin-top:8px;border-radius:24px;">ลบรายการนี้</button>' : ""}
+
+        <button class="btn btn-primary" id="cbSave" style="margin-top:14px;border-radius:24px;">${editing ? 'บันทึกการแก้ไข' : 'บันทึกเงินกองกลาง'}</button>
+        ${editing && canEditContrib(existing) ? '<button class="btn btn-danger" id="cbDelete" style="margin-top:8px;border-radius:24px;">ลบรายการนี้</button>' : ''}
         <button class="btn btn-outline" id="cbCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
       </div>
     </div>`;
 
-    document.getElementById("cbBg").addEventListener("click", close);
-    document.getElementById("cbCancel").addEventListener("click", close);
-    document.getElementById("cbUser").addEventListener("change", e => state.user = e.target.value);
-    document.getElementById("cbAmount").addEventListener("input", e => state.amount = e.target.value);
-    document.getElementById("cbNote").addEventListener("input", e => state.note = e.target.value);
-    document.getElementById("cbSave").addEventListener("click", save);
-    const del = document.getElementById("cbDelete");
-    if (del) del.addEventListener("click", remove);
+    document.getElementById('cbBg').addEventListener('click', close);
+    document.getElementById('cbCancel').addEventListener('click', close);
+    document.getElementById('cbPer').addEventListener('input', e => { state.per = e.target.value; renderModal(); document.getElementById('cbPer').focus(); });
+    document.getElementById('cbNote').addEventListener('input', e => state.note = e.target.value);
+    document.getElementById('cbSave').addEventListener('click', save);
+    const all = document.getElementById('cbAll');
+    if (all) all.addEventListener('click', () => {
+      state.who = state.who.length === people().length ? [] : people().map(m => m.user_id);
+      renderModal();
+    });
+    root.querySelectorAll('[data-who]').forEach(el => el.addEventListener('click', () => {
+      if (editing) return;
+      const id = el.dataset.who;
+      state.who = state.who.includes(id) ? state.who.filter(x => x !== id) : state.who.concat([id]);
+      renderModal();
+    }));
+    const del = document.getElementById('cbDelete');
+    if (del) del.addEventListener('click', remove);
   }
 
-  function close() { root.innerHTML = ""; }
+  function close() { root.innerHTML = ''; }
 
   async function save() {
-    const amount = Number(state.amount);
-    if (!amount || amount <= 0) { toast("ใส่จำนวนเงินให้ถูกต้อง"); return; }
-    const btn = document.getElementById("cbSave");
-    btn.disabled = true; btn.textContent = "กำลังบันทึก...";
-    const fields = { user_id: state.user, amount, note: state.note.trim() || null };
+    const per = Number(state.per);
+    if (!per || per <= 0) { toast('ใส่จำนวนเงินให้ถูกต้อง'); return; }
+    if (!state.who.length) { toast('ติ๊กอย่างน้อย 1 คน'); return; }
+
+    const btn = document.getElementById('cbSave');
+    const label = editing ? 'บันทึกการแก้ไข' : 'บันทึกเงินกองกลาง';
+    btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+
+    const note = state.note.trim() || null;
     const { error } = editing
-      ? await sb.from("trip_contributions").update(fields).eq("id", existing.id)
-      : await sb.from("trip_contributions").insert(Object.assign({ trip_id: tripId, created_by: ME.id }, fields));
-    if (error) { toast("บันทึกไม่สำเร็จ: " + error.message); btn.disabled = false; btn.textContent = editing ? "บันทึกการแก้ไข" : "บันทึกเงินกองกลาง"; return; }
-    toast(editing ? "แก้ไขแล้ว" : "เก็บเงินเข้ากองกลางแล้ว · " + money(amount, TRIP.currency));
+      ? await sb.from('trip_contributions').update({ amount: per, note }).eq('id', existing.id)
+      : await sb.from('trip_contributions').insert(state.who.map(uid => ({
+          trip_id: tripId, user_id: uid, amount: per, note, created_by: ME.id,
+        })));
+
+    if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); btn.disabled = false; btn.textContent = label; return; }
+
+    toast(editing ? 'แก้ไขแล้ว' : 'เก็บเข้ากองกลางแล้ว · ' + state.who.length + ' คน รวม ' + money(per * state.who.length, TRIP.currency));
     close();
     await fetchAll(); render();
   }
 
   async function remove() {
-    if (!confirm("ลบรายการลงเงินนี้? ยอดกองกลางจะคำนวณใหม่")) return;
-    const { error } = await sb.from("trip_contributions").delete().eq("id", existing.id);
-    if (error) { toast("ลบไม่สำเร็จ: " + error.message); return; }
-    toast("ลบรายการลงเงินแล้ว");
+    if (!confirm('ลบรายการลงเงินนี้? ยอดกองกลางจะคำนวณใหม่')) return;
+    const { error } = await sb.from('trip_contributions').delete().eq('id', existing.id);
+    if (error) { toast('ลบไม่สำเร็จ: ' + error.message); return; }
+    toast('ลบรายการลงเงินแล้ว');
     close();
     await fetchAll(); render();
   }
