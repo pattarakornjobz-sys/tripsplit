@@ -43,7 +43,7 @@ async function load() {
   if (!trips.length) { list.innerHTML = '<div class="empty">ยังไม่มีทริปที่ปิดแล้ว</div>'; return; }
 
   const ids = trips.map(t => t.id);
-  const { data: expenses } = await sb.from('ts_expenses').select('trip_id, amount').in('trip_id', ids);
+  const { data: expenses } = await sb.from('expenses').select('trip_id, amount').in('trip_id', ids);
   const totals = {};
   (expenses || []).forEach(e => totals[e.trip_id] = (totals[e.trip_id] || 0) + Number(e.amount));
 
