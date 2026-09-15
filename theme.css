@@ -206,4 +206,7 @@ input,textarea,select{-webkit-user-select:text;user-select:text;-webkit-touch-ca
 .pay-sheet-qr{width:100%;aspect-ratio:1/1;border-radius:16px;object-fit:cover;background:var(--fill);}
 
 /* Pages with no tab bar (create / trip / join) keep their own bottom spacing */
-.phone:not(:has(.tabbar)) .scroll{padding-bottom:26px !important;}
+/* Pages with no tab bar still need clearance for the home indicator and for
+   the last card's shadow — :has() is unsupported on older WebViews, so the
+   fallback above (100px) is the safe one and this only trims it. */
+.phone:not(:has(.tabbar)) .scroll{padding-bottom:calc(40px + env(safe-area-inset-bottom,0)) !important;}

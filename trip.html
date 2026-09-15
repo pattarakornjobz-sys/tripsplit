@@ -34,7 +34,7 @@
     <div class="subtab" data-tab="summary">สรุป</div>
   </div>
 
-  <div id="fab" style="padding:10px 16px 2px;display:none;"></div>
+  <div id="fab" style="padding:10px 16px 2px;display:none;gap:8px;"></div>
 
   <div class="scroll" id="scroll"></div>
 </div>
@@ -43,6 +43,7 @@
 
 <script>
 let ME = null, TRIP = null, MEMBERS = [], INVITES = [], EXPENSES = [], SHARES = [], SETTLEMENTS = [], CONTRIBS = [];
+let LOAD_ERROR = null;
 const POT = 'pot'; // sentinel payer id for money spent out of the shared pot
 let TAB = qs('tab') || 'expenses';
 const tripId = qs('id');
@@ -83,6 +84,7 @@ async function load() {
 }
 
 async function fetchAll() {
+  LOAD_ERROR = null;
   const { data: trip, error: tripErr } = await sb.from('trips').select('*').eq('id', tripId).single();
   if (tripErr) { toast('โหลดทริปไม่สำเร็จ: ' + tripErr.message); }
   TRIP = trip;
@@ -100,7 +102,7 @@ async function fetchAll() {
   const { data: expenses, error: expErr } = await sb.from('expenses')
     .select('*, payer:profiles!expenses_payer_id_fkey(id,display_name,avatar_url)')
     .eq('trip_id', tripId).order('created_at', { ascending: false });
-  if (expErr) { toast('โหลดค่าใช้จ่ายไม่สำเร็จ: ' + expErr.message); }
+  if (expErr) { LOAD_ERROR = expErr.message; toast('โหลดค่าใช้จ่ายไม่สำเร็จ: ' + expErr.message); }
   EXPENSES = expenses || [];
 
   const expIds = EXPENSES.map(e => e.id);
@@ -112,7 +114,7 @@ async function fetchAll() {
 
   const { data: contribs, error: conErr } = await sb.from('trip_contributions')
     .select('*').eq('trip_id', tripId).order('created_at', { ascending: false });
-  if (conErr) { toast('โหลดเงินกองกลางไม่สำเร็จ: ' + conErr.message); }
+  if (conErr) { LOAD_ERROR = conErr.message; toast('โหลดเงินกองกลางไม่สำเร็จ: ' + conErr.message); }
   CONTRIBS = contribs || [];
 
   const { data: settlements, error: setErr } = await sb.from('settlements').select('*').eq('trip_id', tripId).eq('confirmed', true);
@@ -129,23 +131,40 @@ function render() {
   document.querySelectorAll('.subtab').forEach(el => el.classList.toggle('subtab-active', el.dataset.tab === TAB));
   const fab = document.getElementById('fab');
   const canWrite = TRIP.status === 'open';
-  if (TAB === 'expenses' && canWrite) {
-    fab.style.display = 'block';
-    fab.innerHTML = '<button class="btn btn-primary" id="btnAddExpense" style="height:48px;border-radius:24px;">+ เพิ่มค่าใช้จ่าย</button>';
-    document.getElementById('btnAddExpense').addEventListener('click', () => openExpenseModal());
-  } else if (TAB === 'pot' && canWrite) {
-    fab.style.display = 'block';
-    fab.innerHTML = '<button class="btn btn-primary" id="btnAddContrib" style="height:48px;border-radius:24px;">+ เก็บเงินเข้ากองกลาง</button>';
-    document.getElementById('btnAddContrib').addEventListener('click', () => openContribModal());
+  const isOwner = TRIP.owner_id === ME.id;
+  const parts = [];
+
+  if (TAB === 'expenses' && canWrite) parts.push('<button class="btn btn-primary" id="btnAddExpense" style="flex:1;height:48px;border-radius:24px;">+ เพิ่มค่าใช้จ่าย</button>');
+  if (TAB === 'pot' && canWrite) parts.push('<button class="btn btn-primary" id="btnAddContrib" style="flex:1;height:48px;border-radius:24px;">+ เก็บเงินเข้ากองกลาง</button>');
+  if (isOwner) {
+    parts.push(canWrite
+      ? '<button class="btn btn-danger" id="btnClose" style="' + (parts.length ? 'flex:0 0 116px;' : 'flex:1;') + 'height:48px;border-radius:24px;">ปิดทริป</button>'
+      : '<button class="btn btn-primary" id="btnReopen" style="flex:1;height:48px;border-radius:24px;">เปิดทริปอีกครั้ง</button>');
+  }
+
+  if (parts.length) {
+    fab.style.display = 'flex';
+    fab.innerHTML = parts.join('');
+    const add = document.getElementById('btnAddExpense');
+    if (add) add.addEventListener('click', () => openExpenseModal());
+    const contrib = document.getElementById('btnAddContrib');
+    if (contrib) contrib.addEventListener('click', () => openContribModal());
+    const cls = document.getElementById('btnClose');
+    if (cls) cls.addEventListener('click', closeTrip);
+    const reo = document.getElementById('btnReopen');
+    if (reo) reo.addEventListener('click', reopenTrip);
   } else {
     fab.style.display = 'none';
   }
 
   const el = document.getElementById('scroll');
-  if (TAB === 'members') el.innerHTML = renderMembers();
-  else if (TAB === 'expenses') el.innerHTML = renderExpenses();
-  else if (TAB === 'pot') el.innerHTML = renderPot();
-  else el.innerHTML = renderSummary();
+  // An RLS error must not look like an empty trip: say so out loud.
+  const banner = LOAD_ERROR ? '<div class="card card-static" style="border-color:rgba(179,69,43,.4);"><div style="font-size:13px;font-weight:600;color:var(--red);">โหลดข้อมูลบางส่วนไม่ได้</div><div style="margin-top:4px;font-size:11.5px;line-height:1.55;color:var(--muted);">' + escapeHtml(LOAD_ERROR) + '<br>รายการที่บันทึกไว้ยังอยู่ในฐานข้อมูล — รัน fix_rls_all.sql ใน Supabase แล้วรีเฟรช</div></div>' : '';
+
+  if (TAB === 'members') el.innerHTML = banner + renderMembers();
+  else if (TAB === 'expenses') el.innerHTML = banner + renderExpenses();
+  else if (TAB === 'pot') el.innerHTML = banner + renderPot();
+  else el.innerHTML = banner + renderSummary();
 
   bindTabEvents();
 }
@@ -265,11 +284,9 @@ function renderSummary() {
 
   window.__transfers = transfers;
 
-  const closeBtn = TRIP.owner_id === ME.id
-    ? (TRIP.status === 'open'
-      ? '<button class="btn btn-danger" id="btnClose" style="margin-top:18px;border-radius:24px;">ปิดทริปนี้</button>'
-      : '<button class="btn btn-outline" id="btnReopen" style="margin-top:18px;border-radius:24px;">เปิดทริปอีกครั้ง</button>')
-    : '';
+  // The owner's close / reopen control lives in the top action strip and in the
+  // ··· menu, never at the end of this list where a long trip buries it.
+  const closeBtn = '';
 
   return `
     <div class="card card-static" style="background:var(--hero);color:var(--hero-ink);">
@@ -334,10 +351,6 @@ function bindTabEvents() {
   }));
   const gotoPot = document.querySelector('[data-goto-pot]');
   if (gotoPot) gotoPot.addEventListener('click', () => { TAB = 'pot'; render(); });
-  const closeBtn = document.getElementById('btnClose');
-  if (closeBtn) closeBtn.addEventListener('click', closeTrip);
-  const reopenBtn = document.getElementById('btnReopen');
-  if (reopenBtn) reopenBtn.addEventListener('click', reopenTrip);
 }
 
 /* ---------- Trip status ---------- */
