@@ -905,6 +905,13 @@ function openExpenseModal(existing) {
           </select>
           ${state.payer === POT ? `<div id="mPotHint" style="margin-top:6px;font-size:11.5px;line-height:1.55;color:${Number(state.amount || 0) > potLeft() ? 'var(--red)' : 'var(--faint)'};">${Number(state.amount || 0) > potLeft() ? 'ยอดนี้เกินเงินกองกลางที่เหลือ ' + money(potLeft(), TRIP.currency) + ' — บันทึกได้ แต่กองกลางจะติดลบ' : 'ตัดจากเงินกองกลาง ไม่มีใครต้องควักจ่ายเพิ่ม'}</div>` : ''}
         </div>
+        ${state.payer === POT ? `
+        <div class="field">
+          <label>วิธีหาร</label>
+          <div style="padding:12px 14px;border-radius:14px;background:var(--fill);font-size:12.5px;line-height:1.6;color:var(--muted);">
+            หารตามสัดส่วนเงินที่แต่ละคนลงกองกลางให้อัตโนมัติ${potIn() > 0 ? '' : ' (ยังไม่มีใครลงเงิน จะหารเท่ากันทุกคน)'} — ไม่ต้องติ๊กเอง
+          </div>
+        </div>` : `
         <div class="field">
           <label>วิธีหาร</label>
           <div style="display:flex;gap:6px;">
@@ -930,6 +937,7 @@ function openExpenseModal(existing) {
           }).join('')}
         </div>
         ${state.splitType === 'exact' ? `<div id="mRemain" style="margin-top:6px;font-size:12px;color:${Math.abs(remain) < 0.01 ? 'var(--green)' : 'var(--red)'};">${Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency))}</div>` : ''}
+`}
         <button class="btn btn-primary" id="mSave" style="margin-top:18px;border-radius:24px;">${editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}</button>
         <button class="btn btn-outline" id="mCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
       </div>
@@ -941,8 +949,10 @@ function openExpenseModal(existing) {
     document.getElementById('mAmount').addEventListener('input', e => { state.amount = e.target.value; refreshSplitAmounts(); });
     document.getElementById('mCat').addEventListener('change', e => state.category = e.target.value);
     document.getElementById('mPayer').addEventListener('change', e => { state.payer = e.target.value; renderModal(); });
-    document.getElementById('mEqual').addEventListener('click', () => { state.splitType = 'equal'; renderModal(); });
-    document.getElementById('mExact').addEventListener('click', () => { state.splitType = 'exact'; renderModal(); });
+    const eq = document.getElementById('mEqual');
+    if (eq) eq.addEventListener('click', () => { state.splitType = 'equal'; renderModal(); });
+    const ex = document.getElementById('mExact');
+    if (ex) ex.addEventListener('click', () => { state.splitType = 'exact'; renderModal(); });
     root.querySelectorAll('.mrow').forEach(row => row.addEventListener('click', () => {
       const id = row.dataset.id;
       state.involved = state.involved.includes(id) ? state.involved.filter(x => x !== id) : state.involved.concat([id]);
@@ -964,8 +974,27 @@ function openExpenseModal(existing) {
     if (!state.title.trim()) { toast('ใส่ชื่อรายการก่อนนะ'); return; }
     if (!amount || amount <= 0) { toast('ใส่จำนวนเงินให้ถูกต้อง'); return; }
 
+    const fromPot = state.payer === POT;
+
     let shareRows = [];
-    if (state.splitType === 'equal') {
+    if (fromPot) {
+      // Pot money belongs to whoever put it in, so spending it costs each
+      // contributor in proportion to what they contributed. With an empty pot
+      // there is nothing to weigh by, so fall back to an even split.
+      const by = potByMember();
+      const total = potIn();
+      const weights = total > 0
+        ? Object.keys(by).map(id => ({ user_id: id, w: by[id] / total }))
+        : payerOptions().map(m => ({ user_id: m.user_id, w: 1 / payerOptions().length }));
+      let assigned = 0;
+      shareRows = weights.map((x, i) => {
+        const isLast = i === weights.length - 1;
+        const amt = isLast ? Math.round((amount - assigned) * 100) / 100 : Math.round(amount * x.w * 100) / 100;
+        assigned += amt;
+        return { user_id: x.user_id, amount: amt };
+      }).filter(s => s.amount > 0);
+      if (!shareRows.length) { toast('ยังไม่มีสมาชิกให้หารค่าใช้จ่ายนี้'); return; }
+    } else if (state.splitType === 'equal') {
       if (!state.involved.length) { toast('เลือกคนที่ร่วมจ่ายอย่างน้อย 1 คน'); return; }
       const per = Math.round((amount / state.involved.length) * 100) / 100;
       let assigned = 0;
@@ -986,11 +1015,10 @@ function openExpenseModal(existing) {
     const label = editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ';
     saveBtn.disabled = true; saveBtn.textContent = 'กำลังบันทึก...';
 
-    const fromPot = state.payer === POT;
     const fields = {
       payer_id: fromPot ? null : state.payer, paid_from_pot: fromPot,
       title: state.title.trim(), amount,
-      category: state.category, split_type: state.splitType,
+      category: state.category, split_type: fromPot ? 'exact' : state.splitType,
     };
 
     let expenseId;

@@ -210,3 +210,18 @@ input,textarea,select{-webkit-user-select:text;user-select:text;-webkit-touch-ca
    the last card's shadow — :has() is unsupported on older WebViews, so the
    fallback above (100px) is the safe one and this only trims it. */
 .phone:not(:has(.tabbar)) .scroll{padding-bottom:calc(40px + env(safe-area-inset-bottom,0)) !important;}
+
+/* Android WebView shows a copy/search popup on long-press of any text node.
+   Only form fields need selectable text, so opt the whole app out and opt the
+   inputs back in. */
+body,.phone,.modal-sheet,.modal-sheet *,.scroll,.scroll *,.topbar,.topbar *,.headbar,.headbar *{
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
+input,textarea,select,[contenteditable="true"],
+input *,textarea *{
+  -webkit-touch-callout:default;
+  -webkit-user-select:text;
+  user-select:text;
+}
