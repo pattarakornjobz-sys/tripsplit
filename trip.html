@@ -134,7 +134,10 @@ function render() {
   const isOwner = TRIP.owner_id === ME.id;
   const parts = [];
 
-  if (TAB === 'expenses' && canWrite) parts.push('<button class="btn btn-primary" id="btnAddExpense" style="flex:1;height:48px;border-radius:24px;">+ เพิ่มค่าใช้จ่าย</button>');
+  if (TAB === 'expenses' && canWrite) {
+    parts.push('<button class="btn btn-primary" id="btnAddExpense" style="flex:1;height:48px;border-radius:24px;">+ เพิ่มค่าใช้จ่าย</button>');
+    parts.push('<button class="btn btn-outline" id="btnAddMany" style="flex:0 0 104px;height:48px;border-radius:24px;font-size:13.5px;">หลายรายการ</button>');
+  }
   if (TAB === 'pot' && canWrite) parts.push('<button class="btn btn-primary" id="btnAddContrib" style="flex:1;height:48px;border-radius:24px;">+ เก็บเงินเข้ากองกลาง</button>');
   if (isOwner) {
     parts.push(canWrite
@@ -147,6 +150,8 @@ function render() {
     fab.innerHTML = parts.join('');
     const add = document.getElementById('btnAddExpense');
     if (add) add.addEventListener('click', () => openExpenseModal());
+    const many = document.getElementById('btnAddMany');
+    if (many) many.addEventListener('click', () => openBatchModal());
     const contrib = document.getElementById('btnAddContrib');
     if (contrib) contrib.addEventListener('click', () => openContribModal());
     const cls = document.getElementById('btnClose');
@@ -541,7 +546,7 @@ function openContribModal(existing) {
         <div style="width:22px;height:22px;flex-shrink:0;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;background:${on ? 'var(--green)' : 'transparent'};border:1.5px solid ${on ? 'var(--green)' : 'var(--border-strong)'};">${on ? '✓' : ''}</div>
         ${avatarHtml(m.profile, 30)}
         <div style="flex:1;min-width:0;font-size:14px;color:${on ? 'var(--ink)' : 'var(--faint)'};">${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</div>
-        <div style="font-size:13.5px;font-weight:600;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on && Number(state.per) > 0 ? money(Number(state.per), TRIP.currency) : '—'}</div>
+        <div data-per style="font-size:13.5px;font-weight:600;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on && Number(state.per) > 0 ? money(Number(state.per), TRIP.currency) : '—'}</div>
       </div>`;
     }).join('');
 
@@ -565,8 +570,8 @@ function openContribModal(existing) {
         </div>
 
         <div style="display:flex;align-items:baseline;justify-content:space-between;padding:12px 14px;border-radius:14px;background:var(--fill);">
-          <div style="font-size:12.5px;color:var(--muted);">รวมเก็บครั้งนี้ · ${state.who.length} คน</div>
-          <div style="font-size:18px;font-weight:600;color:var(--ink);">${money(total(), TRIP.currency)}</div>
+          <div id="cbCount" style="font-size:12.5px;color:var(--muted);">รวมเก็บครั้งนี้ · ${state.who.length} คน</div>
+          <div id="cbTotal" style="font-size:18px;font-weight:600;color:var(--ink);">${money(total(), TRIP.currency)}</div>
         </div>
 
         <div class="field"><label>หมายเหตุ (ไม่ใส่ก็ได้)</label><input id="cbNote" type="text" placeholder="เช่น เก็บรอบแรกก่อนออกเดินทาง" value="${escapeAttr(state.note)}"></div>
@@ -579,7 +584,9 @@ function openContribModal(existing) {
 
     document.getElementById('cbBg').addEventListener('click', close);
     document.getElementById('cbCancel').addEventListener('click', close);
-    document.getElementById('cbPer').addEventListener('input', e => { state.per = e.target.value; renderModal(); document.getElementById('cbPer').focus(); });
+    // Never re-render on keystroke: it destroys the <input> and drops focus,
+    // which reads as lag. Patch the derived numbers in place instead.
+    document.getElementById('cbPer').addEventListener('input', e => { state.per = e.target.value; refreshTotals(); });
     document.getElementById('cbNote').addEventListener('input', e => state.note = e.target.value);
     document.getElementById('cbSave').addEventListener('click', save);
     const all = document.getElementById('cbAll');
@@ -592,9 +599,27 @@ function openContribModal(existing) {
       const id = el.dataset.who;
       state.who = state.who.includes(id) ? state.who.filter(x => x !== id) : state.who.concat([id]);
       renderModal();
+      refreshTotals();
     }));
     const del = document.getElementById('cbDelete');
     if (del) del.addEventListener('click', remove);
+  }
+
+  // Updates only the text that depends on per-head amount / tick list.
+  function refreshTotals() {
+    const per = Number(state.per) || 0;
+    const el = document.getElementById('cbTotal');
+    if (el) el.textContent = money(per * state.who.length, TRIP.currency);
+    const cnt = document.getElementById('cbCount');
+    if (cnt) cnt.textContent = 'รวมเก็บครั้งนี้ · ' + state.who.length + ' คน';
+    root.querySelectorAll('[data-who]').forEach(row => {
+      const on = state.who.includes(row.dataset.who);
+      const amt = row.querySelector('[data-per]');
+      if (amt) {
+        amt.textContent = on && per > 0 ? money(per, TRIP.currency) : '—';
+        amt.style.color = on ? 'var(--ink)' : 'var(--disabled)';
+      }
+    });
   }
 
   function close() { root.innerHTML = ''; }
@@ -627,6 +652,162 @@ function openContribModal(existing) {
     const { error } = await sb.from('trip_contributions').delete().eq('id', existing.id);
     if (error) { toast('ลบไม่สำเร็จ: ' + error.message); return; }
     toast('ลบรายการลงเงินแล้ว');
+    close();
+    await fetchAll(); render();
+  }
+
+  renderModal();
+}
+
+/* ---------- Batch: several expenses in one go ---------- */
+// Receipts arrive in bunches, so this sheet takes N rows (title / amount /
+// payer) that all share one split, and writes them in a single round trip.
+function openBatchModal() {
+  const everyone = payerOptions().map(m => m.user_id);
+  const state = {
+    rows: [blankRow(), blankRow(), blankRow()],
+    category: 'other',
+    involved: everyone.slice(),
+  };
+  const root = document.getElementById('modalRoot');
+
+  function blankRow() { return { title: '', amount: '', payer: ME.id }; }
+  function filled() { return state.rows.filter(r => r.title.trim() && Number(r.amount) > 0); }
+  function total() { return filled().reduce((a, r) => a + Number(r.amount), 0); }
+
+  // Keystrokes only touch the summary line — never re-render, or focus is lost.
+  function refreshTotals() {
+    const n = filled().length;
+    const cnt = document.getElementById('bmCount');
+    const sum = document.getElementById('bmTotal');
+    if (cnt) cnt.textContent = n ? 'พร้อมบันทึก ' + n + ' รายการ' : 'ยังไม่มีรายการที่กรอกครบ';
+    if (sum) sum.textContent = money(total(), TRIP.currency);
+    const save = document.getElementById('bmSave');
+    if (save) save.textContent = n ? 'บันทึก ' + n + ' รายการ' : 'บันทึกรายการ';
+  }
+
+  function renderModal() {
+    const perHead = state.involved.length || 1;
+    const rowHtml = state.rows.map((r, i) => `
+      <div style="display:flex;gap:7px;align-items:center;padding:7px 0;border-top:1px solid var(--border);">
+        <div style="flex:0 0 18px;font-size:11.5px;color:var(--faint);text-align:center;">${i + 1}</div>
+        <input data-bt="${i}" type="text" placeholder="ชื่อรายการ" value="${escapeAttr(r.title)}" style="flex:1;min-width:0;height:38px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--ink);padding:0 10px;font-size:13.5px;">
+        <input data-ba="${i}" type="number" inputmode="decimal" placeholder="0" value="${escapeAttr(r.amount)}" style="flex:0 0 84px;height:38px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--ink);padding:0 9px;font-size:13.5px;text-align:right;">
+        <select data-bp="${i}" style="flex:0 0 96px;height:38px;border-radius:10px;border:1px solid var(--border-strong);background:var(--input);color:var(--ink);padding:0 6px;font-size:12.5px;">
+          ${payerOptions().map(m => `<option value="${m.user_id}" ${m.user_id === r.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}
+          <option value="${POT}" ${r.payer === POT ? 'selected' : ''}>กองกลาง</option>
+        </select>
+        <div data-brm="${i}" style="flex:0 0 26px;height:38px;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:16px;cursor:pointer;">×</div>
+      </div>`).join('');
+
+    const whoHtml = payerOptions().map(m => {
+      const on = state.involved.includes(m.user_id);
+      return `<div class="mrow" data-bw="${m.user_id}" style="display:inline-flex;align-items:center;gap:7px;padding:7px 11px;margin:0 6px 6px 0;border-radius:11px;cursor:pointer;background:${on ? 'var(--green-tint)' : 'var(--input)'};border:1px solid ${on ? 'rgba(31,111,92,.45)' : 'var(--border-strong)'};">
+        <span style="font-size:12px;font-weight:600;color:${on ? 'var(--green-text)' : 'var(--faint)'};">${on ? '✓' : ''}</span>
+        <span style="font-size:13px;color:${on ? 'var(--green-text)' : 'var(--muted)'};">${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</span>
+      </div>`;
+    }).join('');
+
+    root.innerHTML = `
+    <div class="modal-bg" id="bmBg">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <h3>เพิ่มหลายรายการ</h3>
+        <div style="font-size:12.5px;line-height:1.6;color:var(--muted);">กรอกได้หลายบรรทัดพร้อมกัน ทุกรายการจะหารเท่ากันกับคนที่เลือกไว้ด้านล่าง</div>
+
+        <div class="field" style="margin-top:14px;">
+          <label>รายการ</label>
+          <div>${rowHtml}</div>
+          <div id="bmAdd" style="margin-top:10px;padding:10px;border-radius:12px;border:1px dashed var(--border-strong);text-align:center;font-size:13px;font-weight:600;color:var(--green-text);cursor:pointer;">+ เพิ่มอีกบรรทัด</div>
+        </div>
+
+        <div class="field">
+          <label>หมวดหมู่ (ใช้กับทุกรายการ)</label>
+          <select id="bmCat">${CATS.map(c => `<option value="${c.id}" ${c.id === state.category ? 'selected' : ''}>${c.name}</option>`).join('')}</select>
+        </div>
+
+        <div class="field">
+          <label style="display:flex;align-items:center;justify-content:space-between;">
+            <span>หารกับใคร (${state.involved.length} คน)</span>
+            <span id="bmAll" style="font-size:12px;font-weight:600;color:var(--green-text);cursor:pointer;">${state.involved.length === payerOptions().length ? 'ไม่เลือกทั้งหมด' : 'เลือกทั้งหมด'}</span>
+          </label>
+          <div>${whoHtml}</div>
+        </div>
+
+        <div style="display:flex;align-items:baseline;justify-content:space-between;padding:12px 14px;border-radius:14px;background:var(--fill);">
+          <div id="bmCount" style="font-size:12.5px;color:var(--muted);">${filled().length ? 'พร้อมบันทึก ' + filled().length + ' รายการ' : 'ยังไม่มีรายการที่กรอกครบ'}</div>
+          <div id="bmTotal" style="font-size:18px;font-weight:600;color:var(--ink);">${money(total(), TRIP.currency)}</div>
+        </div>
+
+        <button class="btn btn-primary" id="bmSave" style="margin-top:14px;border-radius:24px;">${filled().length ? 'บันทึก ' + filled().length + ' รายการ' : 'บันทึกรายการ'}</button>
+        <button class="btn btn-outline" id="bmCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
+      </div>
+    </div>`;
+
+    document.getElementById('bmBg').addEventListener('click', close);
+    document.getElementById('bmCancel').addEventListener('click', close);
+    document.getElementById('bmSave').addEventListener('click', save);
+    document.getElementById('bmCat').addEventListener('change', e => state.category = e.target.value);
+    document.getElementById('bmAdd').addEventListener('click', () => { state.rows.push(blankRow()); renderModal(); });
+    document.getElementById('bmAll').addEventListener('click', () => {
+      state.involved = state.involved.length === payerOptions().length ? [] : payerOptions().map(m => m.user_id);
+      renderModal();
+    });
+    root.querySelectorAll('[data-bw]').forEach(el => el.addEventListener('click', () => {
+      const id = el.dataset.bw;
+      state.involved = state.involved.includes(id) ? state.involved.filter(x => x !== id) : state.involved.concat([id]);
+      renderModal();
+    }));
+    root.querySelectorAll('[data-bt]').forEach(inp => inp.addEventListener('input', e => { state.rows[+e.target.dataset.bt].title = e.target.value; refreshTotals(); }));
+    root.querySelectorAll('[data-ba]').forEach(inp => inp.addEventListener('input', e => { state.rows[+e.target.dataset.ba].amount = e.target.value; refreshTotals(); }));
+    root.querySelectorAll('[data-bp]').forEach(sel => sel.addEventListener('change', e => { state.rows[+e.target.dataset.bp].payer = e.target.value; }));
+    root.querySelectorAll('[data-brm]').forEach(el => el.addEventListener('click', () => {
+      const i = +el.dataset.brm;
+      state.rows.splice(i, 1);
+      if (!state.rows.length) state.rows.push(blankRow());
+      renderModal();
+    }));
+  }
+
+  function close() { root.innerHTML = ''; }
+
+  async function save() {
+    const rows = filled();
+    if (!rows.length) { toast('กรอกชื่อรายการและจำนวนเงินอย่างน้อย 1 บรรทัด'); return; }
+    if (!state.involved.length) { toast('เลือกคนที่ร่วมหารอย่างน้อย 1 คน'); return; }
+
+    const btn = document.getElementById('bmSave');
+    btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+
+    const payload = rows.map(r => {
+      const fromPot = r.payer === POT;
+      return {
+        trip_id: tripId, created_by: ME.id,
+        payer_id: fromPot ? null : r.payer, paid_from_pot: fromPot,
+        title: r.title.trim(), amount: Number(r.amount),
+        category: state.category, split_type: 'equal',
+      };
+    });
+
+    const { data: created, error } = await sb.from('expenses').insert(payload).select();
+    if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message); btn.disabled = false; btn.textContent = 'บันทึก ' + rows.length + ' รายการ'; return; }
+
+    // Equal split, with the rounding remainder given to the first person so
+    // the shares always add back up to the expense exactly.
+    const shares = [];
+    created.forEach(e => {
+      const cents = Math.round(Number(e.amount) * 100);
+      const base = Math.floor(cents / state.involved.length);
+      let left = cents - base * state.involved.length;
+      state.involved.forEach((uid, idx) => {
+        const extra = idx < left ? 1 : 0;
+        shares.push({ expense_id: e.id, user_id: uid, amount: (base + extra) / 100 });
+      });
+    });
+
+    const { error: shareErr } = await sb.from('expense_shares').insert(shares);
+    if (shareErr) toast('บันทึกส่วนแบ่งไม่สำเร็จ: ' + shareErr.message);
+    else toast('เพิ่ม ' + created.length + ' รายการแล้ว · รวม ' + money(total(), TRIP.currency));
+
     close();
     await fetchAll(); render();
   }
@@ -669,6 +850,37 @@ function openExpenseModal(existing) {
     return list;
   }
 
+  // Called on every keystroke instead of renderModal(): rebuilding the sheet
+  // would destroy the focused <input> and feel like input lag.
+  function refreshSplitAmounts() {
+    const amount = Number(state.amount || 0);
+    const perHead = amount / (state.involved.length || 1);
+    root.querySelectorAll('[data-id]').forEach(row => {
+      const on = state.involved.includes(row.dataset.id);
+      const cell = row.querySelector('[data-perhead]');
+      if (cell) {
+        cell.textContent = on ? money(perHead, TRIP.currency) : '—';
+        cell.style.color = on ? 'var(--ink)' : 'var(--disabled)';
+      }
+    });
+    const remainEl = document.getElementById('mRemain');
+    if (remainEl) {
+      const exactSum = splitCandidates().reduce((a, m) => a + Number(state.exact[m.user_id] || 0), 0);
+      const remain = amount - exactSum;
+      const ok = Math.abs(remain) < 0.01;
+      remainEl.textContent = ok ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency));
+      remainEl.style.color = ok ? 'var(--green)' : 'var(--red)';
+    }
+    const potHint = document.getElementById('mPotHint');
+    if (potHint) {
+      const over = amount > potLeft();
+      potHint.textContent = over
+        ? 'ยอดนี้เกินเงินกองกลางที่เหลือ ' + money(potLeft(), TRIP.currency) + ' — บันทึกได้ แต่กองกลางจะติดลบ'
+        : 'ตัดจากเงินกองกลาง ไม่มีใครต้องควักจ่ายเพิ่ม';
+      potHint.style.color = over ? 'var(--red)' : 'var(--faint)';
+    }
+  }
+
   function renderModal() {
     const involvedCount = state.involved.length || 1;
     const perHead = Number(state.amount || 0) / involvedCount;
@@ -691,7 +903,7 @@ function openExpenseModal(existing) {
             ${payerOptions().map(m => `<option value="${m.user_id}" ${m.user_id === state.payer ? 'selected' : ''}>${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</option>`).join('')}
             <option value="${POT}" ${state.payer === POT ? 'selected' : ''}>กองกลาง (คงเหลือ ${money(potLeft(), TRIP.currency)})</option>
           </select>
-          ${state.payer === POT ? `<div style="margin-top:6px;font-size:11.5px;line-height:1.55;color:${Number(state.amount || 0) > potLeft() ? 'var(--red)' : 'var(--faint)'};">${Number(state.amount || 0) > potLeft() ? 'ยอดนี้เกินเงินกองกลางที่เหลือ ' + money(potLeft(), TRIP.currency) + ' — บันทึกได้ แต่กองกลางจะติดลบ' : 'ตัดจากเงินกองกลาง ไม่มีใครต้องควักจ่ายเพิ่ม'}</div>` : ''}
+          ${state.payer === POT ? `<div id="mPotHint" style="margin-top:6px;font-size:11.5px;line-height:1.55;color:${Number(state.amount || 0) > potLeft() ? 'var(--red)' : 'var(--faint)'};">${Number(state.amount || 0) > potLeft() ? 'ยอดนี้เกินเงินกองกลางที่เหลือ ' + money(potLeft(), TRIP.currency) + ' — บันทึกได้ แต่กองกลางจะติดลบ' : 'ตัดจากเงินกองกลาง ไม่มีใครต้องควักจ่ายเพิ่ม'}</div>` : ''}
         </div>
         <div class="field">
           <label>วิธีหาร</label>
@@ -707,7 +919,7 @@ function openExpenseModal(existing) {
               return `<div class="mrow" data-id="${m.user_id}" style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;">
                 <div style="width:20px;height:20px;border-radius:6px;border:1.5px solid ${on ? 'var(--green)' : 'var(--border)'};background:${on ? 'var(--green)' : 'transparent'};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;">${on ? '✓' : ''}</div>
                 <div style="flex:1;font-size:13.5px;color:${on ? 'var(--ink)' : 'var(--faint)'};">${escapeHtml(m.user_id === ME.id ? 'คุณ' : (m.profile ? m.profile.display_name : ''))}</div>
-                <div style="font-size:13px;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on ? money(perHead, TRIP.currency) : '—'}</div>
+                <div data-perhead style="font-size:13px;color:${on ? 'var(--ink)' : 'var(--disabled)'};">${on ? money(perHead, TRIP.currency) : '—'}</div>
               </div>`;
             } else {
               return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
@@ -717,7 +929,7 @@ function openExpenseModal(existing) {
             }
           }).join('')}
         </div>
-        ${state.splitType === 'exact' ? `<div style="margin-top:6px;font-size:12px;color:${Math.abs(remain) < 0.01 ? 'var(--green)' : 'var(--red)'};">${Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency))}</div>` : ''}
+        ${state.splitType === 'exact' ? `<div id="mRemain" style="margin-top:6px;font-size:12px;color:${Math.abs(remain) < 0.01 ? 'var(--green)' : 'var(--red)'};">${Math.abs(remain) < 0.01 ? 'ครบพอดี' : (remain > 0 ? 'เหลืออีก ' + money(remain, TRIP.currency) : 'เกินมา ' + money(-remain, TRIP.currency))}</div>` : ''}
         <button class="btn btn-primary" id="mSave" style="margin-top:18px;border-radius:24px;">${editing ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}</button>
         <button class="btn btn-outline" id="mCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
       </div>
@@ -726,7 +938,7 @@ function openExpenseModal(existing) {
     document.getElementById('modalBg').addEventListener('click', close);
     document.getElementById('mCancel').addEventListener('click', close);
     document.getElementById('mTitle').addEventListener('input', e => state.title = e.target.value);
-    document.getElementById('mAmount').addEventListener('input', e => { state.amount = e.target.value; renderModal(); });
+    document.getElementById('mAmount').addEventListener('input', e => { state.amount = e.target.value; refreshSplitAmounts(); });
     document.getElementById('mCat').addEventListener('change', e => state.category = e.target.value);
     document.getElementById('mPayer').addEventListener('change', e => { state.payer = e.target.value; renderModal(); });
     document.getElementById('mEqual').addEventListener('click', () => { state.splitType = 'equal'; renderModal(); });
@@ -735,10 +947,11 @@ function openExpenseModal(existing) {
       const id = row.dataset.id;
       state.involved = state.involved.includes(id) ? state.involved.filter(x => x !== id) : state.involved.concat([id]);
       renderModal();
+      refreshSplitAmounts();
     }));
     root.querySelectorAll('[data-exact]').forEach(inp => inp.addEventListener('input', e => {
       state.exact[e.target.dataset.exact] = e.target.value;
-      renderModal();
+      refreshSplitAmounts();
       document.querySelectorAll('[data-exact]').forEach(i2 => { if (i2.dataset.exact === e.target.dataset.exact) i2.focus(); });
     }));
     document.getElementById('mSave').addEventListener('click', saveExpense);
