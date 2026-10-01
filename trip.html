@@ -90,7 +90,7 @@ async function fetchAll() {
   TRIP = trip;
 
   const { data: members, error: memErr } = await sb.from('trip_members')
-    .select('user_id, role, profile:profiles!trip_members_user_id_profiles_fkey(id,display_name,avatar_url,email,nickname,phone,bank_code,bank_account,account_holder,qr_url,pay_method)')
+    .select('user_id, role, is_traveler, profile:profiles!trip_members_user_id_profiles_fkey(id,display_name,avatar_url,email,nickname,phone,bank_code,bank_account,account_holder,qr_url,pay_method)')
     .eq('trip_id', tripId);
   if (memErr) { toast('โหลดสมาชิกไม่สำเร็จ: ' + memErr.message); }
   MEMBERS = members || [];
@@ -182,6 +182,153 @@ function avatarHtml(profile, size) {
   return `<div class="avatar" style="width:${size}px;height:${size}px;background:${bg};font-size:${size*0.4}px;">${ini}</div>`;
 }
 
+// Expenses whose shares still charge someone marked as not travelling.
+function staleSplits() {
+  const away = MEMBERS.filter(m => m.is_traveler === false).map(m => m.user_id);
+  if (!away.length) return [];
+  return EXPENSES.filter(e => SHARES.some(s => s.expense_id === e.id && away.includes(s.user_id) && Number(s.amount) > 0));
+}
+
+async function fixStaleSplits() {
+  const away = MEMBERS.filter(m => m.is_traveler === false).map(m => m.user_id);
+  const goers = travelers().map(m => m.user_id);
+  if (!goers.length) { toast('ต้องมีคนไปทริปอย่างน้อย 1 คน'); return; }
+  let fixed = 0, skipped = 0;
+  for (const e of staleSplits()) {
+    if (e.split_type === 'exact' && !e.paid_from_pot) { skipped++; continue; }
+    const keep = SHARES.filter(s => s.expense_id === e.id && !away.includes(s.user_id)).map(s => s.user_id);
+    const who = keep.length ? keep : goers;
+    const cents = Math.round(Number(e.amount) * 100);
+    const base = Math.floor(cents / who.length);
+    const rem = cents - base * who.length;
+    const rows = who.map((uid, i) => ({ expense_id: e.id, user_id: uid, amount: (base + (i < rem ? 1 : 0)) / 100 }));
+    await sb.from('expense_shares').delete().eq('expense_id', e.id);
+    const { error } = await sb.from('expense_shares').insert(rows);
+    if (error) { toast('คำนวณใหม่ไม่สำเร็จ: ' + error.message); return; }
+    fixed++;
+  }
+  toast('คำนวณใหม่ ' + fixed + ' รายการ' + (skipped ? ' · ' + skipped + ' รายการแบบระบุเองต้องแก้เอง' : ''));
+  await fetchAll(); render();
+}
+
+async function toggleTraveler(uid) {
+  const m = MEMBERS.find(x => x.user_id === uid);
+  if (!m) return;
+  const next = m.is_traveler === false;
+  if (!next && travelers().length <= 1) { toast('ต้องมีคนไปทริปอย่างน้อย 1 คน'); return; }
+  const { error } = await sb.rpc('set_traveler', { p_trip: tripId, p_user: uid, p_value: next });
+  if (error) { toast('บันทึกไม่สำเร็จ: ' + error.message + ' (รัน schema_traveler.sql หรือยัง?)'); return; }
+  toast(next ? 'ตั้งเป็นคนไปทริปแล้ว' : 'ตั้งเป็นไม่ได้ไปแล้ว · จะไม่ถูกหารค่าใช้จ่ายใหม่');
+  await fetchAll(); render();
+}
+
+/* ---------- Remove member / delete trip ---------- */
+function canRemove(m) {
+  if (m.user_id === TRIP.owner_id) return false;
+  return TRIP.owner_id === ME.id || m.user_id === ME.id;
+}
+
+function hasRecords(uid) {
+  return EXPENSES.some(e => e.payer_id === uid)
+    || SHARES.some(s => s.user_id === uid && Number(s.amount) > 0)
+    || CONTRIBS.some(c => c.user_id === uid)
+    || SETTLEMENTS.some(s => s.from_user === uid || s.to_user === uid);
+}
+
+async function removeMember(uid) {
+  const m = MEMBERS.find(x => x.user_id === uid);
+  if (!m) return;
+  const name = uid === ME.id ? 'คุณ' : (m.profile ? (m.profile.nickname || m.profile.display_name) : 'สมาชิก');
+
+  if (hasRecords(uid)) {
+    const msg = name + ' มีค่าใช้จ่ายหรือเงินกองกลางบันทึกอยู่ในทริปนี้ ถ้าลบออกยอดของทุกคนจะผิด\n\n'
+      + 'แนะนำ: ตั้งเป็น “ไม่ได้ไป” แทน (ระบบจะไม่หารคนนี้ในรายการใหม่) หรือลบ/แก้รายการของคนนี้ก่อนแล้วค่อยลบ\n\n'
+      + 'กด OK เพื่อตั้งเป็น “ไม่ได้ไป”';
+    if (confirm(msg) && m.is_traveler !== false) toggleTraveler(uid);
+    return;
+  }
+
+  const q = uid === ME.id ? 'ออกจากทริป “' + TRIP.name + '”?' : 'ลบ ' + name + ' ออกจากทริป?';
+  if (!confirm(q)) return;
+  const { error } = await sb.rpc('remove_trip_member', { p_trip: tripId, p_user: uid });
+  if (error) {
+    toast(error.message === 'HAS_RECORDS' ? 'คนนี้มีรายการเงินในทริป ลบไม่ได้ — ตั้งเป็น “ไม่ได้ไป” แทน' : 'ลบไม่สำเร็จ: ' + error.message + ' (รัน schema_delete.sql หรือยัง?)');
+    return;
+  }
+  if (uid === ME.id) { toast('ออกจากทริปแล้ว'); location.href = 'trips.html'; return; }
+  toast('ลบ ' + name + ' ออกจากทริปแล้ว');
+  await fetchAll(); render();
+}
+
+// For when the organiser can't go: pick a member to take over the trip.
+function openTransferModal() {
+  const others = MEMBERS.filter(m => m.user_id !== ME.id);
+  const root = document.getElementById('modalRoot');
+  if (!others.length) { toast('ยังไม่มีสมาชิกคนอื่นในทริป — เชิญเพื่อนเข้ามาก่อน'); return; }
+
+  let pick = (others.find(m => m.is_traveler !== false) || others[0]).user_id;
+  let away = true;
+
+  function draw() {
+    const rows = others.map(m => {
+      const on = m.user_id === pick;
+      const name = m.profile ? (m.profile.nickname || m.profile.display_name) : 'สมาชิก';
+      return '<div class="pick" data-pick="' + m.user_id + '" role="radio" aria-checked="' + on + '">'
+        + '<div class="pick-dot"><i></i></div>'
+        + avatarHtml(m.profile, 30)
+        + '<div style="flex:1;min-width:0;"><div class="pick-title">' + escapeHtml(name) + '</div>'
+        + '<div class="pick-sub">' + (m.is_traveler === false ? 'ไม่ได้ไปทริป' : 'ไปทริป') + '</div></div></div>';
+    }).join('');
+
+    root.innerHTML = `
+      <div class="modal-bg" id="toBg">
+        <div class="modal-sheet" onclick="event.stopPropagation()">
+          <h3>โอนความเป็นเจ้าของทริป</h3>
+          <div style="font-size:12.5px;line-height:1.6;color:var(--muted);">เจ้าของคนใหม่จะปิด/เปิดทริป ลบสมาชิก และลบทริปได้ ส่วนคุณจะยังอยู่ในทริปเป็นสมาชิกธรรมดา ดูยอดได้ตามปกติ</div>
+          <div class="rows" style="margin-top:14px;">${rows}</div>
+          <div class="pick" id="toAway" role="checkbox" aria-checked="${away}" style="margin-top:10px;padding:12px 4px;">
+            <div class="pick-dot" style="border-radius:7px;"><i style="border-radius:2px;"></i></div>
+            <div style="flex:1;min-width:0;">
+              <div class="pick-title">ตั้งฉันเป็น “ไม่ได้ไป” ด้วย</div>
+              <div class="pick-sub">รายการใหม่จะไม่หารคุณ (รายการเก่ากด “คำนวณใหม่” ในแท็บสมาชิก)</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="toSave" style="margin-top:14px;border-radius:24px;">โอนให้คนนี้</button>
+          <button class="btn btn-outline" id="toCancel" style="margin-top:8px;border-radius:24px;">ยกเลิก</button>
+        </div>
+      </div>`;
+
+    const close = () => { root.innerHTML = ''; };
+    document.getElementById('toBg').addEventListener('click', close);
+    document.getElementById('toCancel').addEventListener('click', close);
+    root.querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => { pick = el.dataset.pick; draw(); }));
+    document.getElementById('toAway').addEventListener('click', () => { away = !away; draw(); });
+    document.getElementById('toSave').addEventListener('click', async () => {
+      const m = MEMBERS.find(x => x.user_id === pick);
+      const name = m && m.profile ? (m.profile.nickname || m.profile.display_name) : 'สมาชิก';
+      if (!confirm('โอนทริป “' + TRIP.name + '” ให้ ' + name + '? หลังโอนแล้วคุณจะกลับมาเป็นเจ้าของเองไม่ได้ ต้องให้ ' + name + ' โอนคืน')) return;
+      const btn = document.getElementById('toSave');
+      btn.disabled = true; btn.textContent = 'กำลังโอน...';
+      const { error } = await sb.rpc('transfer_trip_owner', { p_trip: tripId, p_new_owner: pick, p_mark_me_away: away });
+      if (error) { toast('โอนไม่สำเร็จ: ' + error.message + ' (รัน schema_transfer_owner.sql หรือยัง?)'); btn.disabled = false; btn.textContent = 'โอนให้คนนี้'; return; }
+      close();
+      toast('โอนให้ ' + name + ' แล้ว' + (away ? ' · ตั้งคุณเป็น “ไม่ได้ไป”' : ''));
+      await fetchAll(); render();
+    });
+  }
+  draw();
+}
+
+async function deleteTrip() {
+  const typed = prompt('ลบทริปนี้ถาวร รวมค่าใช้จ่าย กองกลาง และประวัติการโอนทั้งหมด กู้คืนไม่ได้\n\nพิมพ์ชื่อทริปเพื่อยืนยัน:\n' + TRIP.name);
+  if (typed === null) return;
+  if (typed.trim() !== TRIP.name.trim()) { toast('ชื่อทริปไม่ตรง ยกเลิกการลบ'); return; }
+  const { error } = await sb.rpc('delete_trip', { p_trip: tripId });
+  if (error) { toast('ลบไม่สำเร็จ: ' + error.message + ' (รัน schema_delete.sql หรือยัง?)'); return; }
+  toast('ลบทริปแล้ว');
+  setTimeout(() => { location.href = 'trips.html'; }, 600);
+}
+
 function renderMembers() {
   const rows = MEMBERS.map(m => `
     <div class="card card-static" style="display:flex;align-items:center;gap:12px;">
@@ -190,8 +337,22 @@ function renderMembers() {
         <div style="font-size:14.5px;font-weight:600;color:var(--ink);">${escapeHtml(m.profile ? m.profile.display_name : 'ผู้ใช้')}${m.user_id === ME.id ? ' (คุณ)' : ''}</div>
         <div style="font-size:12px;color:var(--faint);">${escapeHtml(m.profile ? m.profile.email : '')}</div>
       </div>
-      ${m.role === 'owner' ? '<span class="pill pill-open">เจ้าของ</span>' : ''}
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${m.role === 'owner' ? '<span class="pill pill-open">เจ้าของ</span>' : ''}
+        ${(m.user_id === ME.id || TRIP.owner_id === ME.id) && TRIP.status === 'open'
+          ? '<button data-travel="' + m.user_id + '" style="border:none;cursor:pointer;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;font-family:inherit;background:' + (m.is_traveler !== false ? 'var(--green-tint)' : 'var(--fill)') + ';color:' + (m.is_traveler !== false ? 'var(--green-text)' : 'var(--faint)') + ';">' + (m.is_traveler !== false ? '✓ ไปทริป' : 'ไม่ได้ไป') + '</button>'
+          : (m.is_traveler === false ? '<span class="pill pill-closed">ไม่ได้ไป</span>' : '')}
+        ${canRemove(m) ? '<button data-remove="' + m.user_id + '" style="border:none;background:none;cursor:pointer;padding:2px 2px;font-size:11px;font-weight:600;font-family:inherit;color:var(--red);">' + (m.user_id === ME.id ? 'ออกจากทริป' : 'ลบออก') + '</button>' : ''}
+      </div>
     </div>`).join('');
+
+  const stale = staleSplits();
+  const staleBox = stale.length ? `
+    <div class="card card-static" style="border-color:rgba(179,69,43,.4);">
+      <div style="font-size:13px;font-weight:600;color:var(--red);">มี ${stale.length} รายการที่ยังหารรวมคนที่ไม่ได้ไป</div>
+      <div style="margin-top:4px;font-size:11.5px;line-height:1.55;color:var(--muted);">รายการแบบหารเท่ากันจะคำนวณใหม่ให้หารเฉพาะคนที่ไปทริป ส่วนรายการแบบระบุเองให้แก้ทีละรายการ</div>
+      ${TRIP.status === 'open' ? '<button class="btn btn-primary" id="btnFixSplits" style="margin-top:10px;height:40px;border-radius:20px;font-size:13px;">คำนวณใหม่ให้ถูกต้อง</button>' : ''}
+    </div>` : '';
 
   const pending = INVITES.map(iv => `
     <div class="card card-static" style="display:flex;align-items:center;gap:12px;">
@@ -219,7 +380,10 @@ function renderMembers() {
       </div>
     </div>` : '';
 
-  return `<div class="section-label">เข้าร่วมแล้ว (${MEMBERS.length})</div>${rows}
+  const handover = (TRIP.owner_id === ME.id && MEMBERS.length > 1)
+    ? '<div class="card" id="btnHandover" style="display:flex;align-items:center;gap:12px;cursor:pointer;"><div class="row-icon" style="width:36px;height:36px;">⇄</div><div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:600;color:var(--ink);">ไปไม่ได้แล้ว?</div><div style="margin-top:2px;font-size:11.5px;color:var(--faint);">โอนทริปให้เพื่อนดูแลต่อ ทริปยังเดินต่อได้ตามปกติ</div></div><div style="color:var(--faint);font-size:15px;">›</div></div>'
+    : '';
+  return `<div class="section-label">เข้าร่วมแล้ว (${MEMBERS.length}) · ไปทริป ${MEMBERS.filter(m => m.is_traveler !== false).length} คน</div>${staleBox}${handover}${rows}
     ${pending ? '<div class="section-label">รอตอบรับ</div>' + pending : ''}
     ${inviteBox}`;
 }
@@ -344,6 +508,12 @@ function bindTabEvents() {
     toast('บันทึกการโอนแล้ว');
     await fetchAll(); render();
   }));
+  document.querySelectorAll('[data-travel]').forEach(el => el.addEventListener('click', () => toggleTraveler(el.dataset.travel)));
+  document.querySelectorAll('[data-remove]').forEach(el => el.addEventListener('click', () => removeMember(el.dataset.remove)));
+  const ho = document.getElementById('btnHandover');
+  if (ho) ho.addEventListener('click', openTransferModal);
+  const fixBtn = document.getElementById('btnFixSplits');
+  if (fixBtn) fixBtn.addEventListener('click', () => { fixBtn.disabled = true; fixBtn.textContent = 'กำลังคำนวณ...'; fixStaleSplits(); });
   document.querySelectorAll('[data-contrib]').forEach(el => el.addEventListener('click', () => {
     const c = CONTRIBS.find(x => x.id === el.dataset.contrib);
     if (!c) return;
@@ -389,7 +559,11 @@ function openTripMenu() {
         <button class="btn btn-outline" id="tmMembers" style="margin-top:14px;border-radius:24px;">ผู้ร่วมทริปและคำเชิญ</button>
         ${statusRow}
         ${isOwner ? '<div style="margin-top:10px;font-size:11.5px;line-height:1.55;color:var(--faint);">' + (TRIP.status === 'open' ? 'ปิดทริปแล้วจะไม่มีใครเพิ่มหรือแก้ค่าใช้จ่ายได้ ยอดสรุปจะถูกล็อกไว้' : 'เปิดใหม่แล้วสมาชิกบันทึกค่าใช้จ่ายต่อได้') + '</div>' : '<div style="margin-top:10px;font-size:11.5px;color:var(--faint);">เฉพาะเจ้าของทริปเท่านั้นที่ปิดหรือเปิดทริปได้</div>'}
-        <button class="btn btn-outline" id="tmCancel" style="margin-top:14px;border-radius:24px;">ปิดหน้าต่าง</button>
+        ${isOwner
+          ? '<button class="btn btn-outline" id="tmTransfer" style="margin-top:14px;border-radius:24px;">ไปไม่ได้แล้ว · โอนทริปให้เพื่อน</button>'
+            + '<button class="btn btn-danger" id="tmDelete" style="margin-top:8px;border-radius:24px;">ลบทริปนี้ถาวร</button>'
+          : '<button class="btn btn-danger" id="tmLeave" style="margin-top:14px;border-radius:24px;">ออกจากทริป</button>'}
+        <button class="btn btn-outline" id="tmCancel" style="margin-top:8px;border-radius:24px;">ปิดหน้าต่าง</button>
       </div>
     </div>`;
 
@@ -397,6 +571,12 @@ function openTripMenu() {
   document.getElementById('tmBg').addEventListener('click', close);
   document.getElementById('tmCancel').addEventListener('click', close);
   document.getElementById('tmMembers').addEventListener('click', () => { close(); TAB = 'members'; render(); });
+  const tmTr = document.getElementById('tmTransfer');
+  if (tmTr) tmTr.addEventListener('click', () => { close(); openTransferModal(); });
+  const tmDel = document.getElementById('tmDelete');
+  if (tmDel) tmDel.addEventListener('click', () => { close(); deleteTrip(); });
+  const tmLeave = document.getElementById('tmLeave');
+  if (tmLeave) tmLeave.addEventListener('click', () => { close(); removeMember(ME.id); });
   const c = document.getElementById('tmClose');
   if (c) c.addEventListener('click', () => { close(); closeTrip(); });
   const r = document.getElementById('tmReopen');
@@ -532,7 +712,7 @@ function openContribModal(existing) {
   const editing = !!existing;
   const state = editing
     ? { per: String(existing.amount), who: [existing.user_id], note: existing.note || '' }
-    : { per: '', who: payerOptions().map(m => m.user_id), note: '' };
+    : { per: '', who: travelers().map(m => m.user_id), note: '' };
   const root = document.getElementById('modalRoot');
 
   function people() { return editing ? payerOptions().filter(m => m.user_id === existing.user_id) : payerOptions(); }
@@ -663,7 +843,7 @@ function openContribModal(existing) {
 // Receipts arrive in bunches, so this sheet takes N rows (title / amount /
 // payer) that all share one split, and writes them in a single round trip.
 function openBatchModal() {
-  const everyone = payerOptions().map(m => m.user_id);
+  const everyone = travelers().map(m => m.user_id);
   const state = {
     rows: [blankRow(), blankRow(), blankRow()],
     category: 'other',
@@ -671,7 +851,7 @@ function openBatchModal() {
   };
   const root = document.getElementById('modalRoot');
 
-  function blankRow() { return { title: '', amount: '', payer: ME.id }; }
+  function blankRow() { return { title: '', amount: '', payer: travelerPayerDefault() }; }
   function filled() { return state.rows.filter(r => r.title.trim() && Number(r.amount) > 0); }
   function total() { return filled().reduce((a, r) => a + Number(r.amount), 0); }
 
@@ -826,6 +1006,20 @@ function payerOptions() {
   return list;
 }
 
+// People who actually went: the default for every split. Organisers who stayed
+// home (is_traveler = false) can still be ticked by hand, but never by default.
+// If you're not travelling, default the payer to the first person who is.
+function travelerPayerDefault() {
+  const me = MEMBERS.find(m => m.user_id === ME.id);
+  if (!me || me.is_traveler !== false) return ME.id;
+  const first = travelers()[0];
+  return first ? first.user_id : ME.id;
+}
+
+function travelers() {
+  return payerOptions().filter(m => m.is_traveler !== false);
+}
+
 // Pass an expense row to edit it; call with no argument to add a new one.
 function openExpenseModal(existing) {
   const editing = !!existing;
@@ -837,7 +1031,7 @@ function openExpenseModal(existing) {
         involved: own.map(s => s.user_id),
         exact: own.reduce((acc, s) => { acc[s.user_id] = String(s.amount); return acc; }, {}),
       }
-    : { title: '', amount: '', category: 'other', payer: ME.id, splitType: 'equal', involved: payerOptions().map(m => m.user_id), exact: {} };
+    : { title: '', amount: '', category: 'other', payer: travelerPayerDefault(), splitType: 'equal', involved: travelers().map(m => m.user_id), exact: {} };
   const root = document.getElementById('modalRoot');
 
   // While editing, someone who has a share but has since left the trip must
@@ -985,7 +1179,7 @@ function openExpenseModal(existing) {
       const total = potIn();
       const weights = total > 0
         ? Object.keys(by).map(id => ({ user_id: id, w: by[id] / total }))
-        : payerOptions().map(m => ({ user_id: m.user_id, w: 1 / payerOptions().length }));
+        : travelers().map(m => ({ user_id: m.user_id, w: 1 / (travelers().length || 1) }));
       let assigned = 0;
       shareRows = weights.map((x, i) => {
         const isLast = i === weights.length - 1;
